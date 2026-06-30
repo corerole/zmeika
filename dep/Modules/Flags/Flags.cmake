@@ -1,0 +1,8 @@
+set(FLAGS_DIR "${CMAKE_CURRENT_LIST_DIR}")
+target_sources(
+	${PROJECT_NAME} PUBLIC
+	FILE_SET CXX_MODULES 
+	BASE_DIRS ${FLAGS_DIR}
+	FILES
+		"${FLAGS_DIR}/Flags.cppm"
+)

@@ -1,0 +1,7 @@
+set(PWD "${CMAKE_CURRENT_LIST_DIR}")
+include("${PWD}/Flags/Flags.cmake")
+include("${PWD}/GLFW/glfw.cmake")
+include("${PWD}/std/std.cmake")
+include("${PWD}/Vulkan/vulkan.cmake")
+include("${PWD}/Win/win.cmake")
+include("${PWD}/AppData/shader.cmake")
