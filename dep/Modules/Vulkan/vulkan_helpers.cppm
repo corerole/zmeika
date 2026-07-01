@@ -4,11 +4,53 @@ export module vulkan_helpers;
 import std;
 import vulkan;
 
+namespace {
+#if 0
+	static vk::PresentModeKHR create_PresentModeKHR(const vk::raii::PhysicalDevice& PhysDevice, const vk::raii::SurfaceKHR& Surface) {
+		std::vector<vk::PresentModeKHR> presentModes = PhysDevice.getSurfacePresentModesKHR(Surface);
+		unsigned presentModeCount = (unsigned)presentModes.size();
+		if (presentModeCount == 0) { throw std::runtime_error("No presentation modes supported"); }
+		vk::PresentModeKHR presentMode = vk::PresentModeKHR::eFifo;
+		if ((std::find(presentModes.begin(), presentModes.end(), (vk::PresentModeKHR::eFifo))) != presentModes.end()) {
+			return presentMode;
+		}
+		return presentMode;
+	}
+#endif
+}
+
 namespace vk {
 	export namespace supp {
 		constexpr unsigned myVK_MAKE_VERSION(unsigned major, unsigned minor, unsigned patch) {
 			return ((major << 22U) | (minor << 12U) | patch);
 		}
+
+		unsigned findMemoryType(
+			unsigned typeFilter,
+			vk::MemoryPropertyFlags properties,
+			const vk::raii::PhysicalDevice& PhysDevice
+		) {
+			vk::PhysicalDeviceMemoryProperties memProperties = PhysDevice.getMemoryProperties();
+			for (unsigned i = 0; i < memProperties.memoryTypeCount; ++i) {
+				if ((typeFilter & (1 << i)) && ((memProperties.memoryTypes[i].propertyFlags & properties) == properties)) {
+					return i;
+				}
+			}
+			throw std::runtime_error("failed to find suitable memory type!");
+		}
+
+
+		vk::raii::ShaderModule installShader(
+			const vk::raii::Device& device,
+			std::span<const std::byte> ShaderCode
+		) {
+			vk::ShaderModuleCreateInfo createInfo{};
+			createInfo.sType = vk::StructureType::eShaderModuleCreateInfo;
+			createInfo.codeSize = ShaderCode.size();
+			createInfo.pCode = reinterpret_cast<const unsigned*>(ShaderCode.data());
+			return vk::raii::ShaderModule(device, createInfo);
+		}
+
 
 		std::pair<unsigned, unsigned> get_QueueFamilies(
 			const vk::raii::PhysicalDevice& PhysicalDevice,
@@ -105,7 +147,7 @@ namespace vk {
 		) {
 			vk::CommandPoolCreateInfo createInfo{};
 			createInfo.sType = vk::StructureType::eCommandPoolCreateInfo;
-			createInfo.flags = vk::CommandPoolCreateFlags();
+			createInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
 			createInfo.queueFamilyIndex = GaP.first;
 			return vk::raii::CommandPool(Device, createInfo);
 		}
@@ -162,6 +204,54 @@ namespace vk {
 			return Extent;
 		}
 #endif
+			vk::raii::SwapchainKHR get_Swapchain(
+			const vk::raii::Device& Device,
+			const vk::raii::PhysicalDevice& PhysDevice,
+			const vk::raii::SurfaceKHR& Surface,
+			const std::pair<unsigned, unsigned>& GaP,
+			const vk::SurfaceFormatKHR& SurfaceFormat,
+			const vk::Extent2D& Extent)
+		{
+			unsigned GraphicsFamily = GaP.first;
+			unsigned PresentFamily = GaP.second;
+
+			unsigned queueFamilyIndices[] = { GraphicsFamily, PresentFamily };
+			vk::SurfaceCapabilitiesKHR capabilities = PhysDevice.getSurfaceCapabilitiesKHR(Surface);
+			vk::PresentModeKHR presentMode = vk::PresentModeKHR::eFifo; // create_PresentModeKHR(PhysDevice, Surface);
+
+			unsigned ImageCount = capabilities.minImageCount;
+			if (capabilities.maxImageCount > 0 && ImageCount > capabilities.maxImageCount) {
+				ImageCount = capabilities.maxImageCount;
+			}
+
+			vk::SwapchainCreateInfoKHR createInfo{};
+			createInfo.sType = vk::StructureType::eSwapchainCreateInfoKHR;
+			createInfo.flags = vk::SwapchainCreateFlagsKHR();
+			createInfo.surface = Surface;
+			createInfo.minImageCount = ImageCount;
+			createInfo.imageFormat = SurfaceFormat.format;
+			createInfo.imageColorSpace = SurfaceFormat.colorSpace;
+			createInfo.imageExtent = Extent;
+			createInfo.imageArrayLayers = 1;
+			createInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+
+			if (GraphicsFamily != PresentFamily) {
+				createInfo.imageSharingMode = vk::SharingMode::eConcurrent;
+				createInfo.queueFamilyIndexCount = 2;
+				createInfo.pQueueFamilyIndices = queueFamilyIndices;
+			} else {
+				createInfo.imageSharingMode = vk::SharingMode::eExclusive;
+			}
+
+			createInfo.preTransform = capabilities.currentTransform;
+			createInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+			createInfo.presentMode = presentMode;
+			createInfo.clipped = 1u;
+			// createInfo.oldSwapchain = ;
+
+			return vk::raii::SwapchainKHR(Device, createInfo);
+		}
+
 		vk::raii::RenderPass get_RenderPass(
 			const vk::raii::Device& Device,
 			const vk::Format& SwapchainImageFormat
@@ -248,5 +338,309 @@ namespace vk {
 			return vk::raii::RenderPass(Device, createInfo);
 		}
 
+		vk::raii::Buffer create_Buffer(
+			const vk::raii::Device& Device,
+			const vk::DeviceSize& bufferSize,
+			const vk::BufferUsageFlags usage
+		) {
+			vk::BufferCreateInfo bufferInfo{};
+			bufferInfo.sType = vk::StructureType::eBufferCreateInfo;
+			bufferInfo.flags = vk::BufferCreateFlags();
+			bufferInfo.size = bufferSize;
+			bufferInfo.usage = usage;
+			bufferInfo.sharingMode = vk::SharingMode::eExclusive;
+
+			return vk::raii::Buffer(Device, bufferInfo);
+		}
+
+		vk::raii::DeviceMemory create_BufferMemory(
+			const vk::raii::Device& Device,
+			const vk::raii::PhysicalDevice& PhysDevice,
+			vk::raii::Buffer&& Buffer,
+			const vk::MemoryPropertyFlags properties
+		) {
+			vk::MemoryRequirements memRequirements = Buffer.getMemoryRequirements();
+
+			vk::MemoryAllocateInfo allocInfo{};
+			allocInfo.sType = vk::StructureType::eMemoryAllocateInfo;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties, PhysDevice);
+
+			vk::raii::DeviceMemory bufferMemory = Device.allocateMemory(allocInfo);
+
+			vk::BindBufferMemoryInfo bindBufferMemoryInfo{};
+			bindBufferMemoryInfo.sType = vk::StructureType::eBindBufferMemoryInfo;
+			bindBufferMemoryInfo.buffer = Buffer;
+			bindBufferMemoryInfo.memory = bufferMemory;
+			bindBufferMemoryInfo.memoryOffset = 0;
+
+			Device.bindBufferMemory2(bindBufferMemoryInfo);
+			return bufferMemory;
+		}
+
+		std::pair<vk::raii::Image, vk::raii::DeviceMemory> createDepthResources(
+			const vk::raii::Device& device,
+			const vk::raii::PhysicalDevice& physicalDevice,
+			const vk::Extent2D& extent,
+			const vk::raii::CommandPool& commandPool,
+			const vk::raii::Queue& graphicsQueue
+		) {
+			vk::Format depthFormat = vk::Format::eD32Sfloat;
+
+			vk::ImageCreateInfo imageInfo{};
+			imageInfo.imageType = vk::ImageType::e2D;
+			imageInfo.extent.width = extent.width;
+			imageInfo.extent.height = extent.height;
+			imageInfo.extent.depth = 1;
+			imageInfo.mipLevels = 1;
+			imageInfo.arrayLayers = 1;
+			imageInfo.format = depthFormat;
+			imageInfo.tiling = vk::ImageTiling::eOptimal;
+			imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+			imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+			imageInfo.samples = vk::SampleCountFlagBits::e1;
+			imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+			vk::raii::Image depthImage = device.createImage(imageInfo);
+
+			vk::MemoryRequirements memRequirements = depthImage.getMemoryRequirements();
+
+			vk::MemoryAllocateInfo allocInfo{};
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = findMemoryType(
+				memRequirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				physicalDevice
+			);
+
+			vk::raii::DeviceMemory depthImageMemory = device.allocateMemory(allocInfo);
+
+			depthImage.bindMemory(*depthImageMemory, 0);
+
+			return std::pair(std::move(depthImage), std::move(depthImageMemory));
+		}
+
+		vk::raii::ImageView createDepthImageView(
+			const vk::raii::Device& device,
+			const vk::raii::Image& depthImage
+		) {
+			vk::ImageViewCreateInfo viewInfo{};
+			viewInfo.image = *depthImage;
+			viewInfo.viewType = vk::ImageViewType::e2D;
+			viewInfo.format = vk::Format::eD32Sfloat;
+			viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+			viewInfo.subresourceRange.baseMipLevel = 0;
+			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.baseArrayLayer = 0;
+			viewInfo.subresourceRange.layerCount = 1;
+
+			return vk::raii::ImageView(device, viewInfo);
+		}
+
+		void set_ImageViews(
+			const vk::raii::Device& Device,
+			const vk::Format& SwapchainImageFormat,
+			const std::vector<vk::Image>& SwapchainImages,
+			std::vector<vk::raii::ImageView>& SwapchainImageViews
+		) {
+			SwapchainImageViews.clear();
+			unsigned ImageCount = (unsigned)SwapchainImages.size();
+			for (size_t i = 0; i < ImageCount; ++i) {
+				vk::ImageViewCreateInfo createInfo(
+					vk::ImageViewCreateFlags{},
+					SwapchainImages[i],
+					vk::ImageViewType::e2D,
+					SwapchainImageFormat,
+					{ // vk::ComponentMapping
+						vk::ComponentSwizzle::eIdentity, // r
+						vk::ComponentSwizzle::eIdentity, // g
+						vk::ComponentSwizzle::eIdentity, // b
+						vk::ComponentSwizzle::eIdentity  // a
+					},
+					{ // vk::ImageSubresourceRange
+						vk::ImageAspectFlagBits::eColor, // aspectMask
+						0, // baseMipLevel
+						1, // levelCount
+						0, // baseArrayLayer
+						1  // layerCount
+					},
+					nullptr // pNext
+				);
+				SwapchainImageViews.emplace_back(Device, createInfo);
+			}
+		}
+
+		void set_SwapchainFramebuffers(
+			std::vector<vk::raii::Framebuffer>& SwapchainFramebuffers,
+			const vk::raii::Device& Device,
+			const vk::raii::RenderPass& RenderPass,
+			const vk::Extent2D& SwapchainExtent,
+			const std::vector<vk::raii::ImageView>& SwapchainImageViews,
+			const vk::raii::ImageView& DepthImageView
+		) {
+			SwapchainFramebuffers.clear();
+			unsigned nFrameBuffers = (unsigned)SwapchainImageViews.size();
+			for (size_t i = 0; i < nFrameBuffers; i++) {
+				vk::ImageView iv[] = { SwapchainImageViews[i], DepthImageView };
+				vk::FramebufferCreateFlags cf{ 0u };
+				// vk::FramebufferCreateFlags cf = { vk::FramebufferCreateFlagBits::eImagelessKHR };
+				vk::FramebufferCreateInfo framebufferInfo(
+					cf, // create flags
+					RenderPass, // RenderPass
+					iv, // ImageView
+					SwapchainExtent.width, // width
+					SwapchainExtent.height, // height
+					1 // n_layers
+				);
+				SwapchainFramebuffers.emplace_back(Device, framebufferInfo);
+			}
+		}
+#if 0
+		using command_buffer_update_f = std::function<void(const std::vector<vk::raii::CommandBuffer>&)>;
+		using command_buffer_data = std::pair<unsigned, command_buffer_update_f>;
+
+		void set_CommandBuffers(
+			std::vector<vk::raii::CommandBuffer>& commandBuffers,
+			const std::vector<vk::raii::Framebuffer>& framebuffers,
+			const vk::raii::CommandPool& CommandPool,
+			const vk::raii::Device& Device,
+			const vk::raii::RenderPass& RenderPass,
+			const vk::Viewport viewport,
+			const std::vector<>
+		) {
+			commandBuffers.clear();
+			unsigned NFrameBufs = (unsigned)framebuffers.size();
+
+			vk::CommandBufferAllocateInfo allocInfo{};
+			allocInfo.sType = vk::StructureType::eCommandBufferAllocateInfo;
+			allocInfo.commandPool = CommandPool;
+			allocInfo.level = vk::CommandBufferLevel::ePrimary;
+			allocInfo.commandBufferCount = NFrameBufs;
+
+			commandBuffers = Device.allocateCommandBuffers(allocInfo);
+
+			for (auto&& x : ) {
+				x.f(commandBuffers, framebuffers, RenderPass, viewport, x.data);
+			}
+		}
+#endif
+		struct Renderer {
+			private:
+				unsigned FramesInFlight;
+				unsigned CurrentFrame = 0;
+				std::vector<vk::raii::Fence> InFlightFences;
+				std::vector<vk::raii::Fence> ImagesInFlight;
+				std::vector<vk::raii::Semaphore> ImageAvailableSemaphores;
+				std::vector<vk::raii::Semaphore> RenderFinishedSemaphores;
+
+				static std::vector<vk::raii::Semaphore> get_Semaphores(const vk::raii::Device& device, unsigned n) {
+					std::vector<vk::raii::Semaphore> semaphores;
+					semaphores.reserve(n);
+					vk::SemaphoreCreateInfo screateinfo = {};
+					auto create_semaphore = [&device, &screateinfo]() { return vk::raii::Semaphore(device, screateinfo); };
+					std::generate_n(std::back_inserter(semaphores), n, create_semaphore);
+					return semaphores;
+				}
+
+				static std::vector<vk::raii::Fence> get_Fences(const vk::raii::Device& device, unsigned n) {
+					std::vector<vk::raii::Fence> fences;
+					fences.reserve(n);
+					auto create_fence = [&device]() { return vk::raii::Fence(device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)); };
+					std::generate_n(std::back_inserter(fences), n, create_fence);
+					return fences;
+				}
+
+			public:
+				Renderer(const vk::raii::Device& device, unsigned fif, unsigned n_images)
+					: FramesInFlight(fif)
+					, InFlightFences(get_Fences(device, fif))
+					, ImagesInFlight(get_Fences(device, n_images))
+					, ImageAvailableSemaphores(get_Semaphores(device, n_images))
+					, RenderFinishedSemaphores(get_Semaphores(device, n_images))
+				{
+				
+				}
+
+			public:
+				bool render_frame(
+					const vk::raii::Device& device,
+					const vk::raii::SwapchainKHR& swapchain,
+					const vk::raii::Queue& graphics_queue,
+					const vk::raii::Queue& present_queue,
+					const std::vector<vk::raii::CommandBuffer>& command_buffers,
+					const std::vector<vk::raii::Framebuffer>& framebuffers,
+					std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)> update_command_buffer
+				) {
+					constexpr unsigned timeout_U = std::numeric_limits<std::uint64_t>::max();
+					std::ignore = device.waitForFences(*InFlightFences[CurrentFrame], 1u, timeout_U);
+
+					vk::AcquireNextImageInfoKHR acquireInfo(
+						swapchain,
+						timeout_U,
+						*ImageAvailableSemaphores[CurrentFrame],
+						nullptr, 
+						0x1, // dev_mask
+						nullptr // pnext
+					);
+
+					vk::ResultValue<uint32_t> ret = device.acquireNextImage2KHR(acquireInfo);
+					vk::Result result(ret.result);
+					unsigned imageIndex = ret.value;
+
+					if (result == vk::Result::eErrorOutOfDateKHR) {
+						return false;
+					}	else if ((result != vk::Result::eSuccess) && (result != vk::Result::eSuboptimalKHR)) {
+						throw std::runtime_error("failed to acquire swap chain image!");
+					}
+
+					if (ImagesInFlight[imageIndex].getStatus() == vk::Result::eNotReady) {
+						std::ignore = device.waitForFences(*ImagesInFlight[imageIndex], 1u, timeout_U);
+					}
+
+					command_buffers[CurrentFrame].reset(); //vk::CommandBufferResetFlagBits::eReleaseResources);
+					update_command_buffer(command_buffers[CurrentFrame], framebuffers[CurrentFrame]);
+
+					std::array<vk::PipelineStageFlags, 1> waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+					std::array<vk::Semaphore, 1> waitSemaphores = { *ImageAvailableSemaphores[CurrentFrame] };
+					std::array<vk::Semaphore, 1> signalSemaphores = { *RenderFinishedSemaphores[CurrentFrame] };
+					std::array<vk::CommandBuffer, 1> commandBuffers = { *command_buffers[CurrentFrame] };
+
+					vk::SubmitInfo submitInfo(
+						waitSemaphores,
+						waitStages,
+						commandBuffers,
+						signalSemaphores
+					);
+
+					device.resetFences(*InFlightFences[CurrentFrame]);
+
+					vk::SubmitInfo submits[] = { submitInfo };
+					graphics_queue.submit(submits, InFlightFences[CurrentFrame]);
+
+					ImagesInFlight[imageIndex] = std::move(InFlightFences[CurrentFrame]);
+					InFlightFences[CurrentFrame] = vk::raii::Fence(device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
+
+					std::array<vk::SwapchainKHR, 1> sa = { *swapchain };
+					std::array<vk::Result, 1> result_present_info = { vk::Result::eSuccess };
+					uint32_t image_indices[] = { imageIndex };
+					vk::PresentInfoKHR presentInfo(
+						signalSemaphores,
+						sa,
+						image_indices,
+						result_present_info,
+						nullptr
+					);
+					result = present_queue.presentKHR(presentInfo);
+
+					if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
+						return false;
+					}	else if (result != vk::Result::eSuccess) {
+						throw std::runtime_error("failed to present swap chain image!");
+					}
+
+					CurrentFrame = (CurrentFrame + 1) % (FramesInFlight);
+					return true;
+				}
+		};
 	}
 }

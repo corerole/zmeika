@@ -1,8 +1,9 @@
-#pragma once
-#ifndef SHADER_DATA
-#define SHADER_DATA
+module;
 
-constexpr float vVertices[72] = {
+export module vkCube_shaders_data;
+import std;
+
+constexpr std::array<float, 72> vVertices = {
 	// front
 	-1.0f, -1.0f, +1.0f, // point blue
 	+1.0f, -1.0f, +1.0f, // point magenta
@@ -35,7 +36,7 @@ constexpr float vVertices[72] = {
 	+1.0f, -1.0f, +1.0f  // point magenta
 };
 
-constexpr float vColors[72] = {
+constexpr std::array<float, 72> vColors = {
 	// front
 	0.0f,  0.0f,  1.0f, // blue
 	1.0f,  0.0f,  1.0f, // magenta
@@ -68,7 +69,7 @@ constexpr float vColors[72] = {
 	1.0f,  0.0f,  1.0f  // magenta
 };
 
-constexpr float vNormals[72] = {
+constexpr std::array<float, 72> vNormals = {
 	// front
 	+0.0f, +0.0f, +1.0f, // forward
 	+0.0f, +0.0f, +1.0f, // forward
@@ -101,4 +102,10 @@ constexpr float vNormals[72] = {
 	+0.0f, -1.0f, +0.0f  // down
 };
 
-#endif // !SHADER_DATA
+namespace vkCube {
+	export namespace shaders_data {
+		using ::vColors;
+		using ::vNormals;
+		using ::vVertices;
+	}
+}

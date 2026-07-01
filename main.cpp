@@ -4,6 +4,7 @@ import glfw_win32_window;
 import glfw;
 import vulkan;
 import vulkan_helpers;
+import vkCube;
 
 using namespace std::chrono_literals;
 
@@ -99,8 +100,11 @@ int main() {
 	auto GaPq = vk::supp::get_QueueFamilies(physical_device, surface);
 	vk::raii::Device logical_device = vk::supp::get_LogicalDevice(physical_device, GaPq);
 	vk::raii::CommandPool commandpool = vk::supp::get_CommandPool(logical_device, GaPq);
-	vk::raii::Queue graphics_queue(logical_device, GaPq.first, 0);
-	vk::raii::Queue present_queue(logical_device, GaPq.second, 0);
+	// vk::raii::Queue graphics_queue(logical_device, GaPq.first, 0);
+	// vk::raii::Queue present_queue(logical_device, GaPq.second, 0);
+	vk::raii::Queue graphics_queue(logical_device, GaPq.second, 0);
+	vk::raii::Queue present_queue(logical_device, GaPq.first, 0);
+
 	vk::SurfaceFormatKHR surface_format = vk::supp::get_SurfaceFormatKHR(physical_device, surface);
 
 	glfw::Rect glfw_rect = window.get_Position();
@@ -116,5 +120,90 @@ int main() {
 	extent.width = vk::supp::myclamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 	extent.height = vk::supp::myclamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 
+	vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
 	vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, surface_format.format);
+
+	vkCube::vkCubeT vkCube_shader(logical_device, physical_device, renderpass, extent, graphics_queue, commandpool);
+	constexpr unsigned frames_in_flight = 2;
+
+	auto depth_resource = vk::supp::createDepthResources(logical_device, physical_device, extent, commandpool, graphics_queue);
+	vk::raii::ImageView DepthImageView = vk::supp::createDepthImageView(logical_device, depth_resource.first);
+
+	std::vector<vk::Image> swapchain_images;
+	auto update_swapchain_images = [&swapchain_images, &swapchain]() {
+		swapchain_images = swapchain.getImages();
+	};
+	update_swapchain_images();
+
+	std::vector<vk::raii::ImageView> swapchain_ImageViews;
+	auto update_image_views = [&logical_device, &surface_format, &swapchain_images, &swapchain_ImageViews]() {
+		vk::supp::set_ImageViews(
+			logical_device,
+			surface_format.format,
+			swapchain_images,
+			swapchain_ImageViews
+		);
+	};
+	update_image_views();
+	
+	std::vector<vk::raii::Framebuffer> framebuffers;
+	auto update_framebuffes = [&framebuffers, &logical_device, &renderpass, &extent, &swapchain_ImageViews, &DepthImageView]() {
+		vk::supp::set_SwapchainFramebuffers(framebuffers, logical_device, renderpass, extent, swapchain_ImageViews, DepthImageView);
+	};
+	update_framebuffes();
+
+	std::vector<vk::raii::CommandBuffer> command_buffers;
+	auto alloc_command_buffers = [&logical_device, &command_buffers, &commandpool, n_buffs = swapchain_images.size()]() {
+		vk::CommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = vk::StructureType::eCommandBufferAllocateInfo;
+		allocInfo.commandPool = *commandpool;
+		allocInfo.level = vk::CommandBufferLevel::ePrimary;
+		allocInfo.commandBufferCount = n_buffs;
+		command_buffers = logical_device.allocateCommandBuffers(allocInfo);
+	};
+	alloc_command_buffers();
+
+	auto update_commandbuffer = [&vkCube_shader, &renderpass, &extent](
+			const vk::raii::CommandBuffer& command_buffer,
+			const vk::raii::Framebuffer& framebuffer
+		) {
+		vkCube_shader.update(extent);
+		vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, extent);
+	};
+
+	auto update_commandbuffers = [&update_commandbuffer, &command_buffers, &framebuffers]() {
+		auto v = std::views::zip(command_buffers, framebuffers);
+		for (auto&& [cb, fb] : v) {
+			update_commandbuffer(cb, fb);
+		}
+	};
+
+	auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent]() {
+		swapchain	= vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
+	};
+
+	auto recreate_swapchain = [
+		&update_swapchain,
+		&update_swapchain_images,
+		&update_image_views,
+		&update_framebuffes
+	]() {
+		update_swapchain();
+		update_swapchain_images();
+		update_image_views();
+		update_framebuffes();
+	};
+
+	vk::supp::Renderer renderer(logical_device, frames_in_flight, swapchain_ImageViews.size());
+	auto render_frame = [&renderer, &logical_device, &swapchain, &graphics_queue, &present_queue, &command_buffers, &framebuffers, &update_commandbuffer]() -> bool {
+		return renderer.render_frame(logical_device, swapchain, graphics_queue, present_queue, command_buffers, framebuffers, update_commandbuffer);
+	};
+
+	while(true) {
+		auto res = render_frame();
+		if (!res) {
+			logical_device.waitIdle();
+			recreate_swapchain();
+		}
+	}
 }
