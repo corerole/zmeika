@@ -100,34 +100,62 @@ int main() {
 	auto GaPq = vk::supp::get_QueueFamilies(physical_device, surface);
 	vk::raii::Device logical_device = vk::supp::get_LogicalDevice(physical_device, GaPq);
 	vk::raii::CommandPool commandpool = vk::supp::get_CommandPool(logical_device, GaPq);
-	// vk::raii::Queue graphics_queue(logical_device, GaPq.first, 0);
-	// vk::raii::Queue present_queue(logical_device, GaPq.second, 0);
-	vk::raii::Queue graphics_queue(logical_device, GaPq.second, 0);
-	vk::raii::Queue present_queue(logical_device, GaPq.first, 0);
+	vk::raii::Queue graphics_queue(logical_device, GaPq.first, 0);
+	vk::raii::Queue present_queue(logical_device, GaPq.second, 0);
 
 	vk::SurfaceFormatKHR surface_format = vk::supp::get_SurfaceFormatKHR(physical_device, surface);
 
 	glfw::Rect glfw_rect = window.get_Position();
-	glfw::WindowRectCallbackF rect_callback = [&glfw_rect](const glfw::Rect& rect) {
-		glfw_rect = rect;
-	};
-	window.set_window_rect_callback(std::move(rect_callback));
 	unsigned width = glfw_rect.get_right() - glfw_rect.get_left();
 	unsigned height = glfw_rect.get_bottom() - glfw_rect.get_top();
-
 	vk::SurfaceCapabilitiesKHR capabilities = physical_device.getSurfaceCapabilitiesKHR(surface);
+
 	vk::Extent2D extent;
 	extent.width = vk::supp::myclamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 	extent.height = vk::supp::myclamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 
+	glfw::WindowRectCallbackF rect_callback = [&glfw_rect](const glfw::Rect& rect) {
+		glfw_rect = rect;
+	};
+	window.set_window_rect_callback(std::move(rect_callback));
+
+	auto update_extent = [&glfw_rect, &extent, &physical_device, &surface]() {
+		unsigned width = glfw_rect.get_right() - glfw_rect.get_left();
+		unsigned height = glfw_rect.get_bottom() - glfw_rect.get_top();
+		vk::SurfaceCapabilitiesKHR capabilities = physical_device.getSurfaceCapabilitiesKHR(surface);
+		extent.width = vk::supp::myclamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		extent.height = vk::supp::myclamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+	};
+	
 	vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
-	vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, surface_format.format);
+	vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, physical_device, surface_format.format);
 
 	vkCube::vkCubeT vkCube_shader(logical_device, physical_device, renderpass, extent, graphics_queue, commandpool);
 	constexpr unsigned frames_in_flight = 2;
 
-	auto depth_resource = vk::supp::createDepthResources(logical_device, physical_device, extent, commandpool, graphics_queue);
-	vk::raii::ImageView DepthImageView = vk::supp::createDepthImageView(logical_device, depth_resource.first);
+#if 1
+	auto create_depth_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent]() {
+		auto depth_resource = vkCube::createDepthResources(logical_device, physical_device, extent); //, commandpool, graphics_queue);
+		vk::raii::ImageView DepthImageView = vkCube::createDepthImageView(logical_device, depth_resource.first);
+		return std::pair(std::move(DepthImageView), std::move(depth_resource));
+	};
+
+	auto create_color_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent, format = surface_format.format]() {
+		auto color_resource = vkCube::createColorResources(logical_device, physical_device, extent, format); //, commandpool, graphics_queue);
+		vk::raii::ImageView ColorImageView = vkCube::createColorImageView(logical_device, color_resource.first, format);
+		return std::pair(std::move(ColorImageView), std::move(color_resource));
+	};
+
+	auto update_color_image = [color_data = create_color_image(), &create_color_image]() mutable -> const vk::raii::ImageView& {
+		color_data = create_color_image();
+		return color_data.first;
+	};
+
+	auto update_depth_image = [depth_data = create_depth_image(), &create_depth_image]() mutable -> const vk::raii::ImageView& {
+		depth_data = create_depth_image();
+		return depth_data.first;
+	};
+#endif
 
 	std::vector<vk::Image> swapchain_images;
 	auto update_swapchain_images = [&swapchain_images, &swapchain]() {
@@ -147,8 +175,8 @@ int main() {
 	update_image_views();
 	
 	std::vector<vk::raii::Framebuffer> framebuffers;
-	auto update_framebuffes = [&framebuffers, &logical_device, &renderpass, &extent, &swapchain_ImageViews, &DepthImageView]() {
-		vk::supp::set_SwapchainFramebuffers(framebuffers, logical_device, renderpass, extent, swapchain_ImageViews, DepthImageView);
+	auto update_framebuffes = [&framebuffers, &logical_device, &renderpass, &extent, &swapchain_ImageViews, &update_depth_image, &update_color_image]() {
+		vk::supp::set_SwapchainFramebuffers(framebuffers, logical_device, renderpass, extent, swapchain_ImageViews, update_color_image(), update_depth_image());
 	};
 	update_framebuffes();
 
@@ -179,7 +207,8 @@ int main() {
 	};
 
 	auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent]() {
-		swapchain	= vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
+		auto newSwapchain	= vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent, std::move(swapchain));
+		swapchain = std::move(newSwapchain);
 	};
 
 	auto recreate_swapchain = [
@@ -203,6 +232,7 @@ int main() {
 		auto res = render_frame();
 		if (!res) {
 			logical_device.waitIdle();
+			update_extent();
 			recreate_swapchain();
 		}
 	}

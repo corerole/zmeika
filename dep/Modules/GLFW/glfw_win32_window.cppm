@@ -1484,7 +1484,6 @@ namespace win32_window {
 		vk::Win32SurfaceCreateFlagBitsKHR create_flags = {};
 		using vk_hinstance_type = decltype(Win32SurfaceCreateInfo.hinstance);
 		using vk_hwnd_type = decltype(Win32SurfaceCreateInfo.hwnd);
-		// using win_Instance_type = win_cpp::Instance::type;
 		// static_assert(std::same_as<vk_hinstance_type, win_Instance_type>);
 		auto vp_i = static_cast<void*>(win_cpp::Instance::type(instance));
 		auto vp_h = static_cast<void*>(win_cpp::Window::type(window));

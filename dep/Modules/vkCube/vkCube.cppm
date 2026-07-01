@@ -73,8 +73,127 @@ vk::raii::PipelineCache get_PipelineCache_vkCube(const vk::raii::Device& Device)
 	return vk::raii::PipelineCache(Device, createInfo);
 }
 
+export namespace vkCube {
+	std::pair<vk::raii::Image, vk::raii::DeviceMemory> createDepthResources(
+		const vk::raii::Device& device,
+		const vk::raii::PhysicalDevice& physicalDevice,
+		const vk::Extent2D& extent // ,
+		// const vk::raii::CommandPool& commandPool,
+		// const vk::raii::Queue& graphicsQueue
+	) {
+		vk::Format depthFormat = vk::Format::eD32Sfloat;
+
+		vk::ImageCreateInfo imageInfo{};
+		imageInfo.imageType = vk::ImageType::e2D;
+		imageInfo.extent.width = extent.width;
+		imageInfo.extent.height = extent.height;
+		imageInfo.extent.depth = 1;
+		imageInfo.mipLevels = 1;
+		imageInfo.arrayLayers = 1;
+		imageInfo.format = depthFormat;
+		imageInfo.tiling = vk::ImageTiling::eOptimal;
+		imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+		imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+		imageInfo.samples = vk::supp::getMaxUsableSampleCount(physicalDevice);
+		imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+		vk::raii::Image depthImage = device.createImage(imageInfo);
+
+		vk::MemoryRequirements memRequirements = depthImage.getMemoryRequirements();
+
+		vk::MemoryAllocateInfo allocInfo{};
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = vk::supp::findMemoryType(
+			memRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal,
+			physicalDevice
+		);
+
+		vk::raii::DeviceMemory depthImageMemory = device.allocateMemory(allocInfo);
+
+		depthImage.bindMemory(*depthImageMemory, 0);
+
+		return std::pair(std::move(depthImage), std::move(depthImageMemory));
+	}
+
+	vk::raii::ImageView createDepthImageView(
+		const vk::raii::Device& device,
+		const vk::raii::Image& depthImage
+	) {
+		vk::ImageViewCreateInfo viewInfo{};
+		viewInfo.image = *depthImage;
+		viewInfo.viewType = vk::ImageViewType::e2D;
+		viewInfo.format = vk::Format::eD32Sfloat;
+		viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = 1;
+
+		return vk::raii::ImageView(device, viewInfo);
+	}
+
+	std::pair<vk::raii::Image, vk::raii::DeviceMemory> createColorResources(
+		const vk::raii::Device& device,
+		const vk::raii::PhysicalDevice& physicalDevice,
+		const vk::Extent2D& extent,
+		const vk::Format& colorFormat
+	) {
+		vk::ImageCreateInfo imageInfo{};
+		imageInfo.imageType = vk::ImageType::e2D;
+		imageInfo.extent.width = extent.width;
+		imageInfo.extent.height = extent.height;
+		imageInfo.extent.depth = 1;
+		imageInfo.mipLevels = 1;
+		imageInfo.arrayLayers = 1;
+		imageInfo.format = colorFormat;
+		imageInfo.tiling = vk::ImageTiling::eOptimal;
+		imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+		imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment;
+		imageInfo.samples = vk::supp::getMaxUsableSampleCount(physicalDevice);
+		imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+		vk::raii::Image colorImage = device.createImage(imageInfo);
+
+		vk::MemoryRequirements memRequirements = colorImage.getMemoryRequirements();
+
+		vk::MemoryAllocateInfo allocInfo{};
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = vk::supp::findMemoryType(
+			memRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal,
+			physicalDevice
+		);
+
+		vk::raii::DeviceMemory colorImageMemory = device.allocateMemory(allocInfo);
+
+		colorImage.bindMemory(*colorImageMemory, 0);
+
+		return std::pair(std::move(colorImage), std::move(colorImageMemory));
+	}
+
+	vk::raii::ImageView createColorImageView(
+		const vk::raii::Device& device,
+		const vk::raii::Image& colorImage,
+		const vk::Format& colorFormat
+	) {
+		vk::ImageViewCreateInfo viewInfo{};
+		viewInfo.image = *colorImage;
+		viewInfo.viewType = vk::ImageViewType::e2D;
+		viewInfo.format = colorFormat;
+		viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = 1;
+
+		return vk::raii::ImageView(device, viewInfo);
+	}
+}
+
 vk::raii::Pipeline get_Pipeline_vkCube(
 	const vk::raii::Device& Device,
+	const vk::raii::PhysicalDevice& physical_device,
 	const vk::raii::RenderPass& RenderPass,
 	const vk::Extent2D& Extent,
 	const vk::raii::ShaderModule& VertexShaderModule,
@@ -182,7 +301,7 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 	vk::PipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = vk::StructureType::ePipelineMultisampleStateCreateInfo;
 	multisampling.flags = vk::PipelineMultisampleStateCreateFlags();
-	multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+	multisampling.rasterizationSamples = vk::supp::getMaxUsableSampleCount(physical_device);
 	multisampling.sampleShadingEnable = 0u; // def. false
 	multisampling.minSampleShading = 1.0f;
 	multisampling.pSampleMask = &sampleMask;
@@ -548,6 +667,7 @@ export namespace vkCube {
 				, pipeline(
 						get_Pipeline_vkCube(
 							logical_device,
+							physical_device,
 							renderpass,
 							extent,
 							vk::supp::installShader(logical_device, std::as_bytes(std::span<decltype(vert_v)::value_type>(vert_v.data(), vert_v.size()))),

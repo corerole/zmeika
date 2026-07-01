@@ -204,13 +204,15 @@ namespace vk {
 			return Extent;
 		}
 #endif
-			vk::raii::SwapchainKHR get_Swapchain(
+		vk::raii::SwapchainKHR get_Swapchain(
 			const vk::raii::Device& Device,
 			const vk::raii::PhysicalDevice& PhysDevice,
 			const vk::raii::SurfaceKHR& Surface,
 			const std::pair<unsigned, unsigned>& GaP,
 			const vk::SurfaceFormatKHR& SurfaceFormat,
-			const vk::Extent2D& Extent)
+			const vk::Extent2D& Extent,
+			std::optional<vk::raii::SwapchainKHR> oldSwapchain = std::nullopt
+			)
 		{
 			unsigned GraphicsFamily = GaP.first;
 			unsigned PresentFamily = GaP.second;
@@ -247,20 +249,37 @@ namespace vk {
 			createInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 			createInfo.presentMode = presentMode;
 			createInfo.clipped = 1u;
-			// createInfo.oldSwapchain = ;
-
+			if (oldSwapchain.has_value()) {
+				createInfo.oldSwapchain = oldSwapchain.value();
+			}
 			return vk::raii::SwapchainKHR(Device, createInfo);
 		}
 
+		vk::SampleCountFlagBits getMaxUsableSampleCount(const vk::raii::PhysicalDevice& physical_device) {
+			vk::PhysicalDeviceProperties physicalDeviceProperties = physical_device.getProperties();
+			vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
+				physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+
+			if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
+			if (counts & vk::SampleCountFlagBits::e32) { return vk::SampleCountFlagBits::e32; }
+			if (counts & vk::SampleCountFlagBits::e16) { return vk::SampleCountFlagBits::e16; }
+			if (counts & vk::SampleCountFlagBits::e8) { return vk::SampleCountFlagBits::e8; }
+			if (counts & vk::SampleCountFlagBits::e4) { return vk::SampleCountFlagBits::e4; }
+			if (counts & vk::SampleCountFlagBits::e2) { return vk::SampleCountFlagBits::e2; }
+			return vk::SampleCountFlagBits::e1;
+		}
+
+
 		vk::raii::RenderPass get_RenderPass(
 			const vk::raii::Device& Device,
+			const vk::raii::PhysicalDevice& physical_device,
 			const vk::Format& SwapchainImageFormat
 		) {
 			vk::AttachmentDescription colorAttachment{};
 			// colorAttachment.sType = vk::StructureType::eAttachmentDescription2;
 			colorAttachment.flags = vk::AttachmentDescriptionFlags();
 			colorAttachment.format = SwapchainImageFormat;
-			colorAttachment.samples = vk::SampleCountFlagBits::e1;
+			colorAttachment.samples = getMaxUsableSampleCount(physical_device);
 			colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
 			colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
 			colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
@@ -272,13 +291,28 @@ namespace vk {
 
 			vk::AttachmentDescription depthAttachment{};
 			depthAttachment.format = vk::Format::eD32Sfloat;
-			depthAttachment.samples = vk::SampleCountFlagBits::e1;
+			depthAttachment.samples = getMaxUsableSampleCount(physical_device);
 			depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
 			depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
 			depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
 			depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
 			depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
 			depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+#if 1
+			vk::AttachmentDescription resolveAttachment{};
+			resolveAttachment.format = SwapchainImageFormat;
+			resolveAttachment.samples = vk::SampleCountFlagBits::e1; // всегда 1
+			resolveAttachment.loadOp = vk::AttachmentLoadOp::eDontCare;
+			resolveAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+			resolveAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+			resolveAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+			resolveAttachment.initialLayout = vk::ImageLayout::eUndefined;
+			resolveAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
+			vk::AttachmentReference resolveAttachmentRef{};
+			resolveAttachmentRef.attachment = 2;
+			resolveAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+#endif
 
 			vk::AttachmentReference colorAttachmentRef{};
 			// colorAttachmentRef.aspectMask = vk::ImageAspectFlagBits::eNone;
@@ -296,6 +330,7 @@ namespace vk {
 			subpass.colorAttachmentCount = 1;
 			subpass.pColorAttachments = &colorAttachmentRef;
 			subpass.pDepthStencilAttachment = &depthAttachmentRef;
+			subpass.pResolveAttachments = &resolveAttachmentRef;
 
 			constexpr unsigned VK_SUBPASS_EXTERNAL = (~0U); // std::numeric_limits<unsigned>::max();
 
@@ -309,19 +344,30 @@ namespace vk {
 			dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests;
 			dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
 
-			std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+			vk::SubpassDependency presentDependency{};
+			presentDependency.srcSubpass = 0;
+			presentDependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+			presentDependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+			presentDependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+			presentDependency.dstStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
+			presentDependency.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
+
+
+			std::array<vk::AttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, resolveAttachment };
+			std::array<vk::SubpassDependency, 2> dependencies = { dependency, presentDependency };
+			std::array<vk::SubpassDescription, 1> subpasses = { subpass };
 #if 1
 			vk::RenderPassCreateInfo createInfo{};
 			// createInfo.sType = vk::StructureType::eRenderPassCreateInfo;
 			createInfo.sType = vk::StructureType::eRenderPassCreateInfo;
 			createInfo.flags = vk::RenderPassCreateFlags();
 			createInfo.pNext = nullptr;
-			createInfo.attachmentCount = static_cast<unsigned>(attachments.size());
+			createInfo.attachmentCount = attachments.size();
 			createInfo.pAttachments = attachments.data();
-			createInfo.subpassCount = 1;
-			createInfo.pSubpasses = &subpass;
-			createInfo.dependencyCount = 1;
-			createInfo.pDependencies = &dependency;
+			createInfo.subpassCount = subpasses.size();
+			createInfo.pSubpasses = subpasses.data();
+			createInfo.dependencyCount = dependencies.size();
+			createInfo.pDependencies = dependencies.data();
 			// createInfo.correlatedViewMaskCount = 0;
 			// createInfo.pCorrelatedViewMasks = 0;
 #else
@@ -378,65 +424,6 @@ namespace vk {
 			return bufferMemory;
 		}
 
-		std::pair<vk::raii::Image, vk::raii::DeviceMemory> createDepthResources(
-			const vk::raii::Device& device,
-			const vk::raii::PhysicalDevice& physicalDevice,
-			const vk::Extent2D& extent,
-			const vk::raii::CommandPool& commandPool,
-			const vk::raii::Queue& graphicsQueue
-		) {
-			vk::Format depthFormat = vk::Format::eD32Sfloat;
-
-			vk::ImageCreateInfo imageInfo{};
-			imageInfo.imageType = vk::ImageType::e2D;
-			imageInfo.extent.width = extent.width;
-			imageInfo.extent.height = extent.height;
-			imageInfo.extent.depth = 1;
-			imageInfo.mipLevels = 1;
-			imageInfo.arrayLayers = 1;
-			imageInfo.format = depthFormat;
-			imageInfo.tiling = vk::ImageTiling::eOptimal;
-			imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-			imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
-			imageInfo.samples = vk::SampleCountFlagBits::e1;
-			imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-			vk::raii::Image depthImage = device.createImage(imageInfo);
-
-			vk::MemoryRequirements memRequirements = depthImage.getMemoryRequirements();
-
-			vk::MemoryAllocateInfo allocInfo{};
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = findMemoryType(
-				memRequirements.memoryTypeBits,
-				vk::MemoryPropertyFlagBits::eDeviceLocal,
-				physicalDevice
-			);
-
-			vk::raii::DeviceMemory depthImageMemory = device.allocateMemory(allocInfo);
-
-			depthImage.bindMemory(*depthImageMemory, 0);
-
-			return std::pair(std::move(depthImage), std::move(depthImageMemory));
-		}
-
-		vk::raii::ImageView createDepthImageView(
-			const vk::raii::Device& device,
-			const vk::raii::Image& depthImage
-		) {
-			vk::ImageViewCreateInfo viewInfo{};
-			viewInfo.image = *depthImage;
-			viewInfo.viewType = vk::ImageViewType::e2D;
-			viewInfo.format = vk::Format::eD32Sfloat;
-			viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-			viewInfo.subresourceRange.baseMipLevel = 0;
-			viewInfo.subresourceRange.levelCount = 1;
-			viewInfo.subresourceRange.baseArrayLayer = 0;
-			viewInfo.subresourceRange.layerCount = 1;
-
-			return vk::raii::ImageView(device, viewInfo);
-		}
-
 		void set_ImageViews(
 			const vk::raii::Device& Device,
 			const vk::Format& SwapchainImageFormat,
@@ -476,12 +463,13 @@ namespace vk {
 			const vk::raii::RenderPass& RenderPass,
 			const vk::Extent2D& SwapchainExtent,
 			const std::vector<vk::raii::ImageView>& SwapchainImageViews,
+			const vk::raii::ImageView& ColorImageViews,
 			const vk::raii::ImageView& DepthImageView
 		) {
 			SwapchainFramebuffers.clear();
 			unsigned nFrameBuffers = (unsigned)SwapchainImageViews.size();
 			for (size_t i = 0; i < nFrameBuffers; i++) {
-				vk::ImageView iv[] = { SwapchainImageViews[i], DepthImageView };
+				vk::ImageView iv[] = { ColorImageViews, DepthImageView, SwapchainImageViews[i] };
 				vk::FramebufferCreateFlags cf{ 0u };
 				// vk::FramebufferCreateFlags cf = { vk::FramebufferCreateFlagBits::eImagelessKHR };
 				vk::FramebufferCreateInfo framebufferInfo(
@@ -569,7 +557,7 @@ namespace vk {
 					const vk::raii::Queue& present_queue,
 					const std::vector<vk::raii::CommandBuffer>& command_buffers,
 					const std::vector<vk::raii::Framebuffer>& framebuffers,
-					std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)> update_command_buffer
+					const std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>& update_command_buffer
 				) {
 					constexpr unsigned timeout_U = std::numeric_limits<std::uint64_t>::max();
 					std::ignore = device.waitForFences(*InFlightFences[CurrentFrame], 1u, timeout_U);
@@ -616,9 +604,6 @@ namespace vk {
 
 					vk::SubmitInfo submits[] = { submitInfo };
 					graphics_queue.submit(submits, InFlightFences[CurrentFrame]);
-
-					ImagesInFlight[imageIndex] = std::move(InFlightFences[CurrentFrame]);
-					InFlightFences[CurrentFrame] = vk::raii::Fence(device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
 
 					std::array<vk::SwapchainKHR, 1> sa = { *swapchain };
 					std::array<vk::Result, 1> result_present_info = { vk::Result::eSuccess };
