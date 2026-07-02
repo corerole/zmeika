@@ -43,8 +43,7 @@ void main()
 {
     f_color = vVaryingColor;
 }
-)"
-);
+)");
 
 namespace vkCube {
   export namespace shaders_sources {

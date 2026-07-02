@@ -257,7 +257,7 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = vk::StructureType::ePipelineInputAssemblyStateCreateInfo;
 	inputAssembly.flags = vk::PipelineInputAssemblyStateCreateFlags();
-	inputAssembly.topology = vk::PrimitiveTopology::eTriangleStrip; // vk::PrimitiveTopology::eTriangleList;
+	inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
 	inputAssembly.primitiveRestartEnable = 0;
 
 	vk::Viewport viewport{};
@@ -386,16 +386,7 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 
 	return vk::raii::Pipeline(Device, pipelineCache, pipelineInfo, nullptr);
 }
-#if 0
-std::array<std::size_t, 3> get_offsets_vkCube() {
-	auto vVsize = vectorsizeof(vkCube::shaders_data::vVertices);
-	auto vCsize = vectorsizeof(vkCube::shaders_data::vColors);
-	auto vertex_offset = sizeof(vkCube::data::UBO);
-	auto colors_offset = vertex_offset + vVsize;
-	auto normals_offset = colors_offset + vCsize;
-	return std::array<std::size_t, 3>{vertex_offset, colors_offset, normals_offset};
-}
-#else 
+
 std::array<std::size_t, 3> get_offsets_vkCube() {
 	auto vVsize = vectorsizeof(vkCube::shaders_data::vVertices);
 	auto vCsize = vectorsizeof(vkCube::shaders_data::vColors);
@@ -404,7 +395,6 @@ std::array<std::size_t, 3> get_offsets_vkCube() {
 	auto normals_offset = colors_offset + vCsize;
 	return std::array<std::size_t, 3>{vertex_offset, colors_offset, normals_offset};
 }
-#endif
 
 vk::raii::Buffer get_UBO_Buffer(const vk::raii::Device& device) {
 	vk::BufferCreateInfo uboInfo{};
@@ -622,7 +612,6 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_vertex_buffer(
 
 	cmdBuffer.end();
 
-	// Отправляем и ждём завершения
 	vk::SubmitInfo submitInfo{};
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &*cmdBuffer;
@@ -630,6 +619,110 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_vertex_buffer(
 	graphicsQueue.waitIdle();
 
 	return std::pair(std::move(vertexBuffer), std::move(vertexMemory));
+}
+
+std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_index_buffer(
+	const vk::raii::Device& device,
+	const vk::raii::PhysicalDevice& PhysicalDevice,
+	const vk::raii::Queue& graphicsQueue,
+	const vk::raii::CommandPool& commandPool
+) {
+	auto total_size = vectorsizeof(vkCube::shaders_data::vIndices);
+
+	vk::BufferCreateInfo stagingBufferInfo{};
+	stagingBufferInfo.size = total_size;
+	stagingBufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
+	stagingBufferInfo.sharingMode = vk::SharingMode::eExclusive;
+
+	auto stagingBuffer = vk::raii::Buffer(device, stagingBufferInfo);
+
+	auto memReqs = stagingBuffer.getMemoryRequirements();
+	vk::MemoryAllocateInfo allocInfo{};
+	allocInfo.allocationSize = memReqs.size;
+	allocInfo.memoryTypeIndex = vk::supp::findMemoryType(memReqs.memoryTypeBits,
+		vk::MemoryPropertyFlagBits::eHostVisible |
+		vk::MemoryPropertyFlagBits::eHostCoherent,
+		PhysicalDevice
+	);
+
+	auto stagingMemory = vk::raii::DeviceMemory(device, allocInfo);
+	stagingBuffer.bindMemory(stagingMemory, 0);
+
+	// void* data = stagingMemory.mapMemory(0, total_size);
+	// char* ptr = static_cast<char*>(data);
+	// TODO
+	// stagingMemory.unmapMemory();
+	{
+		auto data = std::span<std::byte>(
+			reinterpret_cast<std::byte*>(
+				stagingMemory.mapMemory(0, total_size)
+			),
+			total_size);
+		// const auto& i = vkCube::shaders_data::vIndices;
+		// using i_t = std::remove_cvref_t<decltype(i)>::value_type;
+		// auto tmp = std::span<i_t>(i.data(), i.size());
+		auto ii = std::as_bytes(std::span{vkCube::shaders_data::vIndices});
+		std::copy(ii.begin(), ii.end(), data.begin());
+		stagingMemory.unmapMemory();
+	}
+
+	vk::BufferCreateInfo indicesInfo{};
+	indicesInfo.size = total_size;
+	indicesInfo.usage =
+		vk::BufferUsageFlagBits::eIndexBuffer
+		| vk::BufferUsageFlagBits::eTransferDst;
+	indicesInfo.sharingMode = vk::SharingMode::eExclusive;
+
+	auto indicesBuffer = vk::raii::Buffer(device, indicesInfo);
+	auto indicesReqs = indicesBuffer.getMemoryRequirements();
+	vk::MemoryAllocateInfo indicesAlloc{};
+	indicesAlloc.allocationSize = indicesReqs.size;
+	indicesAlloc.memoryTypeIndex = vk::supp::findMemoryType(
+		indicesReqs.memoryTypeBits,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		PhysicalDevice
+	);
+
+	auto indicesMemory = vk::raii::DeviceMemory(device, indicesAlloc);
+	indicesBuffer.bindMemory(indicesMemory, 0);
+
+	vk::CommandBufferAllocateInfo cmdAllocInfo(*commandPool, vk::CommandBufferLevel::ePrimary, 1);
+	auto cmd_buffs = device.allocateCommandBuffers(cmdAllocInfo);
+	auto cmdBuffer = std::move(cmd_buffs[0]);
+
+	cmdBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+	vk::BufferCopy copyRegion{};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = total_size;
+	cmdBuffer.copyBuffer(*stagingBuffer, *indicesBuffer, copyRegion);
+
+	constexpr auto VK_QUEUE_FAMILY_IGNORED = std::numeric_limits<unsigned>::max();
+	vk::BufferMemoryBarrier barrier{};
+	barrier.buffer = *indicesBuffer;
+	barrier.size = total_size;
+	barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+	barrier.dstAccessMask = vk::AccessFlagBits::eIndexRead;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+	cmdBuffer.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTransfer,
+		vk::PipelineStageFlagBits::eVertexInput, 
+		vk::DependencyFlags(),
+		nullptr, barrier, nullptr
+	);
+
+	cmdBuffer.end();
+
+	vk::SubmitInfo submitInfo{};
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &*cmdBuffer;
+	graphicsQueue.submit(submitInfo, nullptr);
+	graphicsQueue.waitIdle();
+
+	return std::pair(std::move(indicesBuffer), std::move(indicesMemory));
 }
 
 export namespace vkCube {
@@ -644,6 +737,7 @@ export namespace vkCube {
 			vk::raii::Pipeline pipeline;
 			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> ubo_buffer_and_mem;
 			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> vertex_buffer_and_mem;
+			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> indices_buffer_and_mem;
 
 		private:
 			vkCube::data::UBO update_ubo(const vk::Extent2D& extent) {
@@ -678,6 +772,7 @@ export namespace vkCube {
 					)
 				, ubo_buffer_and_mem(get_UBO_BufferAndDeviceMemory(logical_device, physical_device, get_UBO_Buffer(logical_device)))
 				, vertex_buffer_and_mem(get_vertex_buffer(logical_device, physical_device, graphicsQueue, commandPool))
+				, indices_buffer_and_mem(get_index_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 			{
 				constexpr unsigned ubo_size = sizeof(vkCube::data::UBO);
 				
@@ -734,12 +829,11 @@ export namespace vkCube {
 				commandBuffer.beginRenderPass(rr_begin_info, vk::SubpassContents::eInline);
 				commandBuffer.bindVertexBuffers(0, { *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first }, offsets);
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
+				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
 				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_sets[0] }, {});
 				commandBuffer.setViewport(0, viewport);
 				commandBuffer.setScissor(0, rect);
-				for (int j = 0; j < 6; ++j) {
-					commandBuffer.draw(4, 1, j * 4, 0);
-				}
+				commandBuffer.drawIndexed(36, 1, 0, 0, 0);
 				commandBuffer.endRenderPass();
 				commandBuffer.end();
 				

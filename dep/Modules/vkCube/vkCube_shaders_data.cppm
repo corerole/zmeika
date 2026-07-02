@@ -102,10 +102,26 @@ constexpr std::array<float, 72> vNormals = {
 	+0.0f, -1.0f, +0.0f  // down
 };
 
+constexpr std::array<unsigned short, 36> vIndices = {
+	// front (0-3)
+	0, 1, 2,  1, 3, 2,
+	// back (4-7)
+	4, 5, 6,  5, 7, 6,
+	// right (8-11)
+	8, 9, 10, 9, 11, 10,
+	// left (12-15)
+	12, 13, 14, 13, 15, 14,
+	// top (16-19)
+	16, 17, 18, 17, 19, 18,
+	// bottom (20-23)
+	20, 21, 22, 21, 23, 22
+};
+
 namespace vkCube {
 	export namespace shaders_data {
 		using ::vColors;
 		using ::vNormals;
 		using ::vVertices;
+		using ::vIndices;
 	}
 }

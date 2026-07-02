@@ -8,22 +8,26 @@ import vkCube;
 
 using namespace std::chrono_literals;
 
-glfw::CharModsCallbackF charmod_default_callback = [](const std::pair<wchar_t, wchar_t>& sp, glfw::CharModsFlags charmod) {
+glfw::CharModsCallbackF charmod_default_callback = [](const std::pair<wchar_t, wchar_t>& sp, glfw::CharModsFlags charmod) constexpr noexcept {
+#if 0
 	auto& [ch1, ch2] = sp;
 	if (ch2 == 0) {
 		std::wcout << ch1;
 	}	else {
 		std::wcout << ch1 << ch2;
 	}
+#endif
 };
 
-glfw::CharacterCallbackF character_default_callback = [](const auto& sp) {
+glfw::CharacterCallbackF character_default_callback = [](const auto& sp) constexpr noexcept {
+#if 0
 	auto& [ch1, ch2] = sp;
 	if (ch2 == 0) {
 		std::wcout << ch1;
 	}	else {
 		std::wcout << ch1 << ch2;
 	}
+#endif
 };
 
 glfw::KeyCallbackF key_default_callback = [](
@@ -31,20 +35,26 @@ glfw::KeyCallbackF key_default_callback = [](
 	unsigned scancode, // ?
 	glfw::KeyState action,
 	glfw::CharModsFlags mods
-	) {
+	) noexcept {
+#if 0
 		std::cout << std::hex << "Key: " << scancode
 			<< " | action: " << std::to_underlying(action)
 			<< " | mods: " << glfw::CharModsFlags::MaskType(mods)
 			<< std::endl;
+#endif
 };
 
-glfw::CursorPositionCallbackT cursor_position_default_callback = [](const std::pair<int, int>& pos) {
+glfw::CursorPositionCallbackT cursor_position_default_callback = [](const std::pair<int, int>& pos) noexcept {
+#if 0
 	auto&& [x, y] = pos;
 	std::cout << "cpos | x=" << x << " | y=" << y << " |\n";
+#endif
 };
 
-glfw::CursorStateCallbackT cursor_state_default_callback = [](const glfw::CursorState& state) {
+glfw::CursorStateCallbackT cursor_state_default_callback = [](const glfw::CursorState& state) noexcept {
+#if 0
 	std::cout << "cstate: " << std::to_underlying(state) << "\n";
+#endif
 };
 
 /* ------------------  VK_TEST ----------------------- */
@@ -95,6 +105,7 @@ int main() {
 	window.set_cursor_state_callback(std::move(cursor_state_default_callback));
 
 	vk::raii::SurfaceKHR surface = win32_window::get_vk_raii_SurfaceKHR(instance, window);
+	
 	auto PhisicalDevices = instance.enumeratePhysicalDevices();
 	const vk::raii::PhysicalDevice& physical_device = PhisicalDevices[0];
 	auto GaPq = vk::supp::get_QueueFamilies(physical_device, surface);
@@ -120,11 +131,15 @@ int main() {
 	window.set_window_rect_callback(std::move(rect_callback));
 
 	auto update_extent = [&glfw_rect, &extent, &physical_device, &surface]() {
+#if 0
 		unsigned width = glfw_rect.get_right() - glfw_rect.get_left();
 		unsigned height = glfw_rect.get_bottom() - glfw_rect.get_top();
 		vk::SurfaceCapabilitiesKHR capabilities = physical_device.getSurfaceCapabilitiesKHR(surface);
 		extent.width = vk::supp::myclamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 		extent.height = vk::supp::myclamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+#else
+		extent = physical_device.getSurfaceCapabilitiesKHR(surface).currentExtent;
+#endif
 	};
 	
 	vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
@@ -156,10 +171,17 @@ int main() {
 		return depth_data.first;
 	};
 #endif
+	constexpr std::size_t VK_IMAGES_N_ELEMS = 4;
+	constexpr std::size_t VK_IMAGES_SIZE = VK_IMAGES_N_ELEMS * sizeof(vk::raii::Image);
+	std::array<std::byte, VK_IMAGES_SIZE> VK_IMAGES_BUFFER = {};
+	std::pmr::monotonic_buffer_resource VK_IMAGES_RESOURCE(VK_IMAGES_BUFFER.data(), VK_IMAGES_BUFFER.size(), nullptr);
+	std::pmr::vector<vk::Image> swapchain_images(&VK_IMAGES_RESOURCE);
+	swapchain_images.reserve(VK_IMAGES_N_ELEMS);
 
-	std::vector<vk::Image> swapchain_images;
 	auto update_swapchain_images = [&swapchain_images, &swapchain]() {
-		swapchain_images = swapchain.getImages();
+		swapchain_images.clear();
+		auto si = swapchain.getImages();
+		for (auto& elem : si) { swapchain_images.emplace_back(std::move(elem)); }
 	};
 	update_swapchain_images();
 
@@ -228,11 +250,16 @@ int main() {
 		return renderer.render_frame(logical_device, swapchain, graphics_queue, present_queue, command_buffers, framebuffers, update_commandbuffer);
 	};
 
-	while(true) {
+	auto window_work = []() -> bool { return true; };
+	while(window_work()) {
 		auto res = render_frame();
 		if (!res) {
 			logical_device.waitIdle();
 			update_extent();
+			while(!extent.width || !extent.height) {
+				std::this_thread::sleep_for(100ms);
+				update_extent();
+			}
 			recreate_swapchain();
 		}
 	}

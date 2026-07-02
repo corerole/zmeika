@@ -276,7 +276,6 @@ namespace vk {
 			const vk::Format& SwapchainImageFormat
 		) {
 			vk::AttachmentDescription colorAttachment{};
-			// colorAttachment.sType = vk::StructureType::eAttachmentDescription2;
 			colorAttachment.flags = vk::AttachmentDescriptionFlags();
 			colorAttachment.format = SwapchainImageFormat;
 			colorAttachment.samples = getMaxUsableSampleCount(physical_device);
@@ -285,7 +284,8 @@ namespace vk {
 			colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
 			// colorAttachment.initialLayout = vk::ImageLayout::ePresentSrcKHR;
 			// We want the image to be ready for presentation using the swap chain after rendering
-			colorAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+			// colorAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+			colorAttachment.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
 			colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
 			colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
 
@@ -307,6 +307,7 @@ namespace vk {
 			resolveAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
 			resolveAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
 			resolveAttachment.initialLayout = vk::ImageLayout::eUndefined;
+			// resolveAttachment.initialLayout = vk::ImageLayout::ePresentSrcKHR;
 			resolveAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
 
 			vk::AttachmentReference resolveAttachmentRef{};
@@ -351,7 +352,6 @@ namespace vk {
 			presentDependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
 			presentDependency.dstStageMask = vk::PipelineStageFlagBits::eBottomOfPipe;
 			presentDependency.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
-
 
 			std::array<vk::AttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, resolveAttachment };
 			std::array<vk::SubpassDependency, 2> dependencies = { dependency, presentDependency };
@@ -424,10 +424,11 @@ namespace vk {
 			return bufferMemory;
 		}
 
+		template<typename T> concept ArrayLike = std::true_type::value;
 		void set_ImageViews(
 			const vk::raii::Device& Device,
 			const vk::Format& SwapchainImageFormat,
-			const std::vector<vk::Image>& SwapchainImages,
+			const ArrayLike auto& SwapchainImages,
 			std::vector<vk::raii::ImageView>& SwapchainImageViews
 		) {
 			SwapchainImageViews.clear();
@@ -471,7 +472,6 @@ namespace vk {
 			for (size_t i = 0; i < nFrameBuffers; i++) {
 				vk::ImageView iv[] = { ColorImageViews, DepthImageView, SwapchainImageViews[i] };
 				vk::FramebufferCreateFlags cf{ 0u };
-				// vk::FramebufferCreateFlags cf = { vk::FramebufferCreateFlagBits::eImagelessKHR };
 				vk::FramebufferCreateInfo framebufferInfo(
 					cf, // create flags
 					RenderPass, // RenderPass
@@ -585,7 +585,7 @@ namespace vk {
 						std::ignore = device.waitForFences(*ImagesInFlight[imageIndex], 1u, timeout_U);
 					}
 
-					command_buffers[CurrentFrame].reset(); //vk::CommandBufferResetFlagBits::eReleaseResources);
+					command_buffers[CurrentFrame].reset();
 					update_command_buffer(command_buffers[CurrentFrame], framebuffers[CurrentFrame]);
 
 					std::array<vk::PipelineStageFlags, 1> waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
