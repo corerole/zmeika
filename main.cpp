@@ -92,20 +92,33 @@ vk::raii::Instance instance(context, InstanceInfo);
 
 /* ------------------  VK_TEST ----------------------- */
 
+#if 0
+void foo() {
+	const float PITCH_LIMIT = 89.0f;
+	if (mainCamera.pitch > PITCH_LIMIT) {
+		mainCamera.pitch = PITCH_LIMIT;
+	}
+	if (mainCamera.pitch < -PITCH_LIMIT) {
+		mainCamera.pitch = -PITCH_LIMIT;
+	}
+}
+#endif
+
 int main() {
 	glfw::WindowCreateInfo info = {};
 	info.title = glfw::Title(AppName);
-	info.rect = glfw::Rect(25, 25, 400, 400);
+	info.rect = glfw::Rect(50, 50, 800, 800);
 	using window_type = glfw::Window<win32_window::GLFW_Window_Win>;
-	window_type window;
+	window_type window(info);
 	window.set_key_mods_callback(std::move(charmod_default_callback));
 	window.set_character_callback(std::move(character_default_callback));
 	window.set_key_callback(std::move(key_default_callback));
-	window.set_cursor_position_callback(std::move(cursor_position_default_callback));
+	std::pair<long, long> m_pos(0, 0);
+	window.set_cursor_position_callback(std::move([&m_pos](const std::pair<long, long>& pos) { m_pos = pos; }));
 	window.set_cursor_state_callback(std::move(cursor_state_default_callback));
 
 	vk::raii::SurfaceKHR surface = win32_window::get_vk_raii_SurfaceKHR(instance, window);
-	
+
 	auto PhisicalDevices = instance.enumeratePhysicalDevices();
 	const vk::raii::PhysicalDevice& physical_device = PhisicalDevices[0];
 	auto GaPq = vk::supp::get_QueueFamilies(physical_device, surface);
@@ -127,7 +140,7 @@ int main() {
 
 	glfw::WindowRectCallbackF rect_callback = [&glfw_rect](const glfw::Rect& rect) {
 		glfw_rect = rect;
-	};
+		};
 	window.set_window_rect_callback(std::move(rect_callback));
 
 	auto update_extent = [&glfw_rect, &extent, &physical_device, &surface]() {
@@ -140,37 +153,37 @@ int main() {
 #else
 		extent = physical_device.getSurfaceCapabilitiesKHR(surface).currentExtent;
 #endif
-	};
-	
+		};
+
 	vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
 	vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, physical_device, surface_format.format);
 
-	vkCube::vkCubeT vkCube_shader(logical_device, physical_device, renderpass, extent, graphics_queue, commandpool);
+	vkCube::vkUBO_T vk_ubo(logical_device, physical_device);
+	vkCube::vkCubeT vkCube_shader(logical_device, vk_ubo.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
 	constexpr unsigned frames_in_flight = 2;
 
-#if 1
 	auto create_depth_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent]() {
-		auto depth_resource = vkCube::createDepthResources(logical_device, physical_device, extent); //, commandpool, graphics_queue);
+		auto depth_resource = vkCube::createDepthResources(logical_device, physical_device, extent);
 		vk::raii::ImageView DepthImageView = vkCube::createDepthImageView(logical_device, depth_resource.first);
 		return std::pair(std::move(DepthImageView), std::move(depth_resource));
-	};
+		};
 
 	auto create_color_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent, format = surface_format.format]() {
-		auto color_resource = vkCube::createColorResources(logical_device, physical_device, extent, format); //, commandpool, graphics_queue);
+		auto color_resource = vkCube::createColorResources(logical_device, physical_device, extent, format);
 		vk::raii::ImageView ColorImageView = vkCube::createColorImageView(logical_device, color_resource.first, format);
 		return std::pair(std::move(ColorImageView), std::move(color_resource));
-	};
+		};
 
 	auto update_color_image = [color_data = create_color_image(), &create_color_image]() mutable -> const vk::raii::ImageView& {
 		color_data = create_color_image();
 		return color_data.first;
-	};
+		};
 
 	auto update_depth_image = [depth_data = create_depth_image(), &create_depth_image]() mutable -> const vk::raii::ImageView& {
 		depth_data = create_depth_image();
 		return depth_data.first;
-	};
-#endif
+		};
+
 	constexpr std::size_t VK_IMAGES_N_ELEMS = 4;
 	constexpr std::size_t VK_IMAGES_SIZE = VK_IMAGES_N_ELEMS * sizeof(vk::raii::Image);
 	std::array<std::byte, VK_IMAGES_SIZE> VK_IMAGES_BUFFER = {};
@@ -182,7 +195,7 @@ int main() {
 		swapchain_images.clear();
 		auto si = swapchain.getImages();
 		for (auto& elem : si) { swapchain_images.emplace_back(std::move(elem)); }
-	};
+		};
 	update_swapchain_images();
 
 	std::vector<vk::raii::ImageView> swapchain_ImageViews;
@@ -193,13 +206,13 @@ int main() {
 			swapchain_images,
 			swapchain_ImageViews
 		);
-	};
+		};
 	update_image_views();
-	
+
 	std::vector<vk::raii::Framebuffer> framebuffers;
 	auto update_framebuffes = [&framebuffers, &logical_device, &renderpass, &extent, &swapchain_ImageViews, &update_depth_image, &update_color_image]() {
 		vk::supp::set_SwapchainFramebuffers(framebuffers, logical_device, renderpass, extent, swapchain_ImageViews, update_color_image(), update_depth_image());
-	};
+		};
 	update_framebuffes();
 
 	std::vector<vk::raii::CommandBuffer> command_buffers;
@@ -210,22 +223,32 @@ int main() {
 		allocInfo.level = vk::CommandBufferLevel::ePrimary;
 		allocInfo.commandBufferCount = n_buffs;
 		command_buffers = logical_device.allocateCommandBuffers(allocInfo);
-	};
+		};
 	alloc_command_buffers();
 
-	auto update_commandbuffer = [&vkCube_shader, &renderpass, &extent](
+	auto update_mouse_data = [inital = m_pos, &m_pos]() mutable -> std::pair<float, float> {
+		auto& [ix, iy] = inital;
+		auto& [cx, cy] = m_pos;
+
+		auto dx = cx - ix;
+		auto dy = cy - iy;
+		inital = m_pos;
+
+		const float SENSITIVITY = 0.8f;  // deg for px
+
+		auto rx = dx * SENSITIVITY;
+		auto ry = dy * SENSITIVITY;
+
+		return { rx, ry };
+	};
+
+	using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
+	update_f update_commandbuffer = [&renderpass, &vk_ubo, &extent, &vkCube_shader, &update_mouse_data](
 			const vk::raii::CommandBuffer& command_buffer,
 			const vk::raii::Framebuffer& framebuffer
 		) {
-		vkCube_shader.update(extent);
-		vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, extent);
-	};
-
-	auto update_commandbuffers = [&update_commandbuffer, &command_buffers, &framebuffers]() {
-		auto v = std::views::zip(command_buffers, framebuffers);
-		for (auto&& [cb, fb] : v) {
-			update_commandbuffer(cb, fb);
-		}
+		vk_ubo.update(extent, update_mouse_data());
+		vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, vk_ubo.get_DescriptorSet(), extent);
 	};
 
 	auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent]() {

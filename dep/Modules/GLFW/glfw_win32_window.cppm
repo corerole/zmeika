@@ -986,8 +986,10 @@ auto cWM_SYSKEYUP = [](const win_cpp::Window& window, Config& cfg, win_cpp::Poly
 };
 
 auto cWM_MOUSEMOVE = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-	// 	auto [x, y] = win_cpp::GetMousePosition(windowData.lParam);
-#if 0
+	
+#if 1
+	auto [y, x] = win_cpp::GetMousePosition(windowData.lParam);
+
 	if (!cfg.wmouse.isTracking()) {
 		cfg.wmouse.StartTracking(window, win_cpp::TrackMouseEventFlags::values::TME_LEAVE);
 		cfg.cursor.enter();

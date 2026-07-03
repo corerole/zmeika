@@ -191,19 +191,19 @@ export namespace glfw {
 			long left, top, right, bottom;
 
 		public:
-			const long& get_top() const { return top; }
-			long& get_top() { return top; }
+			constexpr const long& get_top() const noexcept { return top; }
+			constexpr long& get_top() { return top; }
 
-			const long& get_bottom() const { return bottom; }
-			long& get_bottom() { return bottom; }
+			constexpr const long& get_bottom() const noexcept { return bottom; }
+			constexpr long& get_bottom() noexcept { return bottom; }
 
-			const long& get_right() const { return right; }
-			long& get_right() { return right; }
+			constexpr const long& get_right() const noexcept { return right; }
+			constexpr long& get_right() noexcept { return right; }
 
-			const long& get_left() const { return left; }
-			long& get_left() { return left; }
+			constexpr const long& get_left() const noexcept { return left; }
+			constexpr long& get_left() noexcept { return left; }
 
-			Rect(long left = 0, long top = 0, long right = 0, long bottom = 0) : left(left), top(top), right(right), bottom(bottom) {}
+			constexpr Rect(long left = 0, long top = 0, long right = 0, long bottom = 0) noexcept : left(left), top(top), right(right), bottom(bottom) {}
 	};
 
 	struct SizeLimits {

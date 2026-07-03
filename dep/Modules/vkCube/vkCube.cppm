@@ -43,14 +43,15 @@ vk::raii::DescriptorPool get_DescriptorPool(const vk::raii::Device& logical_devi
 	return vk::raii::DescriptorPool(logical_device, dci);
 }
 
-std::vector<vk::raii::DescriptorSet> get_DescriptorSets_vkCube(
+vk::raii::DescriptorSet get_DescriptorSet_vkCube(
 	const vk::raii::Device& logical_device,
 	const vk::raii::DescriptorPool& descPool,
 	const vk::raii::DescriptorSetLayout& descSetLayout
 ) {
 	std::array<vk::DescriptorSetLayout, 1> ls = { *descSetLayout };
 	vk::DescriptorSetAllocateInfo dsai(descPool, ls);
-	return logical_device.allocateDescriptorSets(dsai);
+	auto desc_sets = logical_device.allocateDescriptorSets(dsai);
+	return vk::raii::DescriptorSet(std::move(desc_sets[0]));
 }
 
 vk::raii::PipelineLayout get_PipelineLayout_vkCube(const vk::raii::Device& Device, const vk::raii::DescriptorSetLayout& descLayout) {
@@ -60,7 +61,6 @@ vk::raii::PipelineLayout get_PipelineLayout_vkCube(const vk::raii::Device& Devic
 	pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
 	pipelineLayoutCreateInfo.setLayoutCount = 1;
 	pipelineLayoutCreateInfo.pSetLayouts = &(*descLayout);
-
 	return vk::raii::PipelineLayout(Device, pipelineLayoutCreateInfo);;
 }
 
@@ -77,9 +77,7 @@ export namespace vkCube {
 	std::pair<vk::raii::Image, vk::raii::DeviceMemory> createDepthResources(
 		const vk::raii::Device& device,
 		const vk::raii::PhysicalDevice& physicalDevice,
-		const vk::Extent2D& extent // ,
-		// const vk::raii::CommandPool& commandPool,
-		// const vk::raii::Queue& graphicsQueue
+		const vk::Extent2D& extent
 	) {
 		vk::Format depthFormat = vk::Format::eD32Sfloat;
 
@@ -332,7 +330,11 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 	depthStencilInfo.minDepthBounds = 0.0f;
 
 	vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	colorBlendAttachment.colorWriteMask =
+		vk::ColorComponentFlagBits::eR
+		| vk::ColorComponentFlagBits::eG
+		| vk::ColorComponentFlagBits::eB
+		| vk::ColorComponentFlagBits::eA;
 	// vk::ColorComponentFlagBits::eA | vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB;
 	colorBlendAttachment.blendEnable = 0;
 	colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eZero;
@@ -387,7 +389,7 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 	return vk::raii::Pipeline(Device, pipelineCache, pipelineInfo, nullptr);
 }
 
-std::array<std::size_t, 3> get_offsets_vkCube() {
+constexpr std::array<std::size_t, 3> get_offsets_vkCube() {
 	auto vVsize = vectorsizeof(vkCube::shaders_data::vVertices);
 	auto vCsize = vectorsizeof(vkCube::shaders_data::vColors);
 	auto vertex_offset = 0u;                      // вершины в начале
@@ -395,6 +397,8 @@ std::array<std::size_t, 3> get_offsets_vkCube() {
 	auto normals_offset = colors_offset + vCsize;
 	return std::array<std::size_t, 3>{vertex_offset, colors_offset, normals_offset};
 }
+
+constexpr std::array<std::size_t, 3> offsets = get_offsets_vkCube();
 
 vk::raii::Buffer get_UBO_Buffer(const vk::raii::Device& device) {
 	vk::BufferCreateInfo uboInfo{};
@@ -423,107 +427,6 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_UBO_BufferAndDeviceMemor
 	buffer.bindMemory(uboBufferMemory, 0);
 	return std::pair(std::forward<decltype(buffer)>(buffer), std::forward<decltype(std::move(uboBufferMemory))>(std::move(uboBufferMemory)));
 }
-
-#if 0
-std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_Buffers_vkCube(vk::supp::BufferCreater& bc, std::array<size_t, 3>& offsets) {
-	auto& vertex_offset = offsets[0];
-	auto& colors_offset = offsets[1];
-	auto& normals_offset = offsets[2];
-	auto vNsize = vectorsizeof(vkcube::vNormals);
-	size_t bufferSize = normals_offset + vNsize;
-	auto bnm = bc.createEmptyBuffer(
-		bufferSize,
-		vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eVertexBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
-	{
-		auto mm = bc.get_MemoryMapper(bnm.second, bufferSize);
-		void* mapped = mm.get_mapped();
-
-		std::copy(vVertices.begin(), vVertices.end(), static_cast<decltype(vVertices)::value_type*>((void*)((char*)mapped + vertex_offset)));
-		std::copy(vColors.begin(), vColors.end(), static_cast<decltype(vColors)::value_type*>((void*)((char*)mapped + colors_offset)));
-		std::copy(vNormals.begin(), vNormals.end(), static_cast<decltype(vNormals)::value_type*>((void*)((char*)mapped + normals_offset)));
-	}
-	return bnm;
-}
-#endif
-#if 0
-vk::raii::DescriptorSet get_DescriptorSet_vkCube(
-	vk::supp::DescritorPoolCreator& descPoolCreator,
-	const vk::raii::DescriptorPool& descPool,
-	const vk::raii::DescriptorSetLayout& descSetLayout
-) {
-	std::array<vk::DescriptorSetLayout, 1> ls = { *descSetLayout };
-
-	auto descSets = descPoolCreator.allocate_DescriptorSets(descPool, ls);
-	return std::move(descSets[0]);
-}
-
-void VkCube::update_DescriptorSet_vkCube(
-	const vk::raii::Buffer& buffer,
-	const vk::raii::DescriptorSet& descSet,
-	vk::supp::DescritorPoolCreator& descPoolCreator
-) {
-	vk::DescriptorBufferInfo bufferInfo(buffer, 0, sizeof(vkcube::UBO));
-
-	std::array<vk::WriteDescriptorSet, 1> wds;
-	wds[0].dstSet = descSet;
-	wds[0].dstBinding = 0;
-	wds[0].dstArrayElement = 0;
-	wds[0].descriptorCount = 1;
-	wds[0].descriptorType = vk::DescriptorType::eUniformBuffer;
-	wds[0].pBufferInfo = &bufferInfo;
-
-	descPoolCreator.update_DescriptorSet(wds, {});
-}
-
-vk::supp::CommandBufferData get_CommandBufferData() {
-	if (!is_inited) { throw std::runtime_error("can't be used without init"); }
-	vk::supp::CommandBufferData cb_data;
-	cb_data.data = &cbdata;
-	cb_data.f = vkCube_set_CommandBuffer;
-	return cb_data;
-}
-#endif
-#if 0
-void vkCube_set_CommandBuffer(
-	std::span<vk::raii::CommandBuffer> commandBuffers,
-	std::span<vk::raii::Framebuffer> framebuffers,
-	const vk::raii::RenderPass& renderpass,
-	const vk::Rect2D& scissor,
-	const vk::Viewport& viewport
-) {
-	ubo_obj.update(scissor.extent);
-	/* update buffer memory */
-#if 0
-	void* mapped = data.buffer.second.mapMemory(0, sizeof(vkcube::UBO));
-	std::memcpy(mapped, &ubo, sizeof(vkcube::UBO));
-	data.buffer.second.unmapMemory();
-#endif
-	auto v = std::views::zip(commandBuffers, framebuffers);
-	for (auto& [commandBuffer, framebuffer] : v) {
-		vk::CommandBufferBeginInfo cb_begin_info{};
-		commandBuffer.begin(cb_begin_info);
-		std::array<vk::ClearValue, 2> clearVal{};
-		clearVal[0] = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
-		clearVal[1] = vk::ClearDepthStencilValue(1.0f, 0);
-		vk::RenderPassBeginInfo rr_begin_info(*renderpass, *framebuffer, scissor, clearVal);
-		commandBuffer.beginRenderPass(rr_begin_info, vk::SubpassContents::eInline);
-		commandBuffer.bindVertexBuffers(0, { shaderBuffer.first, shaderBuffer.first, shaderBuffer.first }, data.offsets);
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *data.pipeline);
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *data.pipelineLayout, 0, { *data.descriptorSet }, {});
-		commandBuffer.setViewport(0, viewport);
-		commandBuffer.setScissor(0, scissor);
-		for (int j = 0; j < 6; ++j) {
-			commandBuffer.draw(4, 1, j * 4, 0);
-		}
-		commandBuffer.endRenderPass();
-		commandBuffer.end();
-	}
-}
-#endif
-
-std::array<std::size_t, 3> offsets = get_offsets_vkCube();
 
 std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_vertex_buffer(
 	const vk::raii::Device& device,
@@ -656,8 +559,9 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_index_buffer(
 		auto data = std::span<std::byte>(
 			reinterpret_cast<std::byte*>(
 				stagingMemory.mapMemory(0, total_size)
-			),
-			total_size);
+			)
+			, total_size
+		);
 		// const auto& i = vkCube::shaders_data::vIndices;
 		// using i_t = std::remove_cvref_t<decltype(i)>::value_type;
 		// auto tmp = std::span<i_t>(i.data(), i.size());
@@ -727,37 +631,84 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> get_index_buffer(
 
 export namespace vkCube {
 #if 1
-	struct vkCubeT {
+	struct vkUBO_T {
 		private:
 			vkCube::data::UBO_obj ubo_obj;
 			vk::raii::DescriptorPool desc_pool;
 			vk::raii::DescriptorSetLayout desc_layout;
-			std::vector<vk::raii::DescriptorSet> desc_sets;
-			vk::raii::PipelineLayout pipeline_layout;
-			vk::raii::Pipeline pipeline;
+			vk::raii::DescriptorSet desc_set;
 			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> ubo_buffer_and_mem;
-			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> vertex_buffer_and_mem;
-			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> indices_buffer_and_mem;
 
 		private:
-			vkCube::data::UBO update_ubo(const vk::Extent2D& extent) {
-				return ubo_obj.update(extent);
+			vkCube::data::UBO update_ubo(const vk::Extent2D& extent, const std::pair<float, float>& m_pos) {
+				return ubo_obj.update(extent, m_pos);
 			}
+
+		public:
+			vkUBO_T(
+				const vk::raii::Device& logical_device,
+				const vk::raii::PhysicalDevice& physical_device
+			)
+				: ubo_obj({})
+				, desc_pool(get_DescriptorPool(logical_device))
+				, desc_layout(get_DescriptorSetLayout_vkCube(logical_device))
+				, desc_set(get_DescriptorSet_vkCube(logical_device, desc_pool, desc_layout))
+				, ubo_buffer_and_mem(get_UBO_BufferAndDeviceMemory(logical_device, physical_device, get_UBO_Buffer(logical_device)))
+			{
+				constexpr unsigned ubo_size = sizeof(vkCube::data::UBO);
+
+				vk::DescriptorBufferInfo bufferInfo{};
+				bufferInfo.buffer = *ubo_buffer_and_mem.first;
+				bufferInfo.offset = 0;
+				bufferInfo.range = ubo_size;
+
+				vk::WriteDescriptorSet writeSet{};
+				writeSet.dstSet = *desc_set;
+				writeSet.dstBinding = 0;
+				writeSet.dstArrayElement = 0;
+				writeSet.descriptorCount = 1;
+				writeSet.descriptorType = vk::DescriptorType::eUniformBuffer;
+				writeSet.pBufferInfo = &bufferInfo;
+
+				logical_device.updateDescriptorSets(writeSet, {});
+			}
+
+			const vk::raii::DescriptorSet& get_DescriptorSet() const {
+				return desc_set;
+			}
+
+			const vk::raii::DescriptorSetLayout& get_DescriptorSetLayout() const {
+				return desc_layout;
+			}
+
+		public:
+			void update(const vk::Extent2D& extent, const std::pair<float, float>& m_pos) {
+				auto ubo = update_ubo(extent, m_pos);
+
+				void* uboPtr = ubo_buffer_and_mem.second.mapMemory(0, sizeof(decltype(ubo)));
+				std::memcpy(uboPtr, &ubo, sizeof(ubo));
+				ubo_buffer_and_mem.second.unmapMemory();
+			}
+	};
+
+	struct vkCubeT {
+		private:
+			vk::raii::PipelineLayout pipeline_layout;
+			vk::raii::Pipeline pipeline;
+			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> vertex_buffer_and_mem;
+			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> indices_buffer_and_mem;
 
 		public:
 			vkCubeT(
 				const vk::raii::Device& logical_device,
+				const vk::raii::DescriptorSetLayout& ubo_desc_layout,
 				const vk::raii::PhysicalDevice& physical_device,
 				const vk::raii::RenderPass& renderpass,
 				const vk::Extent2D& extent,
 				const vk::raii::Queue& graphicsQueue,
 				const vk::raii::CommandPool& commandPool
 			)
-				: ubo_obj({})
-				, desc_pool(get_DescriptorPool(logical_device))
-				, desc_layout(get_DescriptorSetLayout_vkCube(logical_device))
-				, desc_sets(get_DescriptorSets_vkCube(logical_device, desc_pool, desc_layout))
-				, pipeline_layout(get_PipelineLayout_vkCube(logical_device, desc_layout))
+				: pipeline_layout(get_PipelineLayout_vkCube(logical_device, ubo_desc_layout))
 				, pipeline(
 						get_Pipeline_vkCube(
 							logical_device,
@@ -770,41 +721,17 @@ export namespace vkCube {
 							get_PipelineCache_vkCube(logical_device)
 						)
 					)
-				, ubo_buffer_and_mem(get_UBO_BufferAndDeviceMemory(logical_device, physical_device, get_UBO_Buffer(logical_device)))
 				, vertex_buffer_and_mem(get_vertex_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 				, indices_buffer_and_mem(get_index_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 			{
-				constexpr unsigned ubo_size = sizeof(vkCube::data::UBO);
-				
-				vk::DescriptorBufferInfo bufferInfo{};
-				bufferInfo.buffer = *ubo_buffer_and_mem.first;
-				bufferInfo.offset = 0;
-				bufferInfo.range = ubo_size;
-
-				vk::WriteDescriptorSet writeSet{};
-				writeSet.dstSet = *desc_sets[0];
-				writeSet.dstBinding = 0;
-				writeSet.dstArrayElement = 0;
-				writeSet.descriptorCount = 1;
-				writeSet.descriptorType = vk::DescriptorType::eUniformBuffer;
-				writeSet.pBufferInfo = &bufferInfo;
-
-				logical_device.updateDescriptorSets(writeSet, {});
 			}
 	
 		public:
-			void update(const vk::Extent2D& extent) {
-				auto ubo = update_ubo(extent);
-
-				void* uboPtr = ubo_buffer_and_mem.second.mapMemory(0, sizeof(decltype(ubo)));
-				std::memcpy(uboPtr, &ubo, sizeof(ubo));
-				ubo_buffer_and_mem.second.unmapMemory();
-			}
-
 			void setup_command_buffers(
 				const vk::raii::CommandBuffer& commandBuffer,
 				const vk::raii::Framebuffer& framebuffer,
 				const vk::raii::RenderPass& renderpass,
+				const vk::raii::DescriptorSet& desc_set,
 				const vk::Extent2D& extent
 			) {
 				vk::Viewport viewport = {};
@@ -830,13 +757,12 @@ export namespace vkCube {
 				commandBuffer.bindVertexBuffers(0, { *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first }, offsets);
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
-				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_sets[0] }, {});
+				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set }, {});
 				commandBuffer.setViewport(0, viewport);
 				commandBuffer.setScissor(0, rect);
 				commandBuffer.drawIndexed(36, 1, 0, 0, 0);
 				commandBuffer.endRenderPass();
 				commandBuffer.end();
-				
 			}
 	};
 	
