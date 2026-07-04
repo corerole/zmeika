@@ -242,12 +242,16 @@ int main() {
 		return { rx, ry };
 	};
 
+
+
 	using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
 	update_f update_commandbuffer = [&renderpass, &vk_ubo, &extent, &vkCube_shader, &update_mouse_data](
 			const vk::raii::CommandBuffer& command_buffer,
 			const vk::raii::Framebuffer& framebuffer
 		) {
-		vk_ubo.update(extent, update_mouse_data());
+		vk_ubo.update_extent(extent);
+		vk_ubo.update_mouse_position(update_mouse_data()); // async / other thread
+		vk_ubo.update_device_buffer();
 		vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, vk_ubo.get_DescriptorSet(), extent);
 	};
 

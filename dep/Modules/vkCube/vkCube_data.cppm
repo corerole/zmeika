@@ -42,15 +42,22 @@ namespace vkCube {
 				glm::vec3 m_position = glm::vec3(0.0f, 2.0f, 8.0f);
 				float m_yaw = 1.0f;
 				float m_pitch = 1.0f;
+				float height = 1.0f;
+				float width = 1.0f;
 
 			public:
-				vkCube::data::UBO update(const vk::Extent2D& extent, const std::pair<float, float>& dxy) {
+				void update_hw(unsigned new_height, unsigned new_width) {
+					height = new_height;
+					width = new_width;
+				}
+
+				void update_mouse_pos(const std::pair<float, float>& dxy) {
 					auto&& [dx, dy] = dxy;
 					m_yaw += glm::radians(dx);
 					m_pitch += glm::radians(dy);
 					
 					m_pitch = glm::clamp(m_pitch, -PITCH_LIMIT, PITCH_LIMIT);
-					std::cout << "y: " << m_yaw << " | p:" << m_pitch << std::endl;
+
 					glm::vec3 forward;
 					forward.x = cos(m_yaw) * cos(m_pitch);
 					forward.y = sin(m_pitch);
@@ -66,7 +73,7 @@ namespace vkCube {
 					glm::mat4 model = glm::mat4(1.0f);
 					ubo.modelview = view * model;
 
-					float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+					auto aspect = width / height;
 					glm::mat4 projection = glm::gtc::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 					ubo.modelviewprojection = projection * ubo.modelview;
 
@@ -74,7 +81,9 @@ namespace vkCube {
 					for (int i = 0; i < 3; ++i) {
 						ubo.normal[i] = glm::vec4(normalMatrix[i], 0.0f);
 					}
+				}
 
+				vkCube::data::UBO get_ubo() {
 					return ubo;
 				}
 		};

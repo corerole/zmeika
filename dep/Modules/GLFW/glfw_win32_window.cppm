@@ -4,6 +4,7 @@ export module glfw_win32_window;
 import std;
 import madmap;
 import win_cpp;
+import windowProc;
 import glfw;
 import vulkan;
 
@@ -339,16 +340,15 @@ struct GLFW_Monitor_Win32 {
 };
 
 struct Cursor {
-	using RawInput_state = glfw::CursorRawInput;
-
 	glfw::CursorStateCallbackT dummy_state_callback = [](const glfw::CursorState&) noexcept {};
 	glfw::CursorPositionCallbackT dummy_pos_callback = [](const std::pair<int, int>& pos) noexcept {};
 
 	private:
 		glfw::CursorState state_ = glfw::CursorState::normal;
-		RawInput_state ri_state = RawInput_state::disabled;
+		glfw::CursorRawInput raw_input_state = glfw::CursorRawInput::disabled;
 		glfw::CursorStateCallbackT cursor_state_callback_f = dummy_state_callback;
 		glfw::CursorPositionCallbackT cursor_position_callback_f = dummy_pos_callback;
+		std::unique_ptr<win_cpp::MouseRawInput> mri;
 		std::pair<int, int> position = { 0, 0 };
 
 	public:
@@ -363,7 +363,7 @@ struct Cursor {
 		}
 
 		std::pair<int, int> get_position() const noexcept { return position; }
-		RawInput_state get_RawInputState() { return ri_state; }
+		glfw::CursorRawInput get_RawInputState() { return raw_input_state; }
 		glfw::CursorState get_state() const noexcept { return state_; }
 
 		void set_cursor_position_callback(glfw::CursorPositionCallbackT&& cpct) {
@@ -389,16 +389,18 @@ struct Cursor {
 		}
 
 		void enable(const win_cpp::Window& window) {
-			// if (window->rawMouseMotion) {
-				// disableRawMouseMotion(window);
-			// }
-
-			// _glfw.win32.disabledCursorWindow = NULL;
+			if(raw_input_state == glfw::CursorRawInput::enabled) {
+				mri.reset();
+				raw_input_state = glfw::CursorRawInput::disabled;
+			}
+			
 			release(window);
+#if 0
 			// _glfwSetCursorPosWin32(window,
 				// _glfw.win32.restoreCursorPosX,
 				// _glfw.win32.restoreCursorPosY);
 			// updateCursorImage(window);
+#endif
 		}
 
 		void capture(const win_cpp::Window& window) {
@@ -410,16 +412,26 @@ struct Cursor {
 		}
 
 		void disable(const win_cpp::Window& window) {
+#if 0
 			// _glfw.win32.disabledCursorWindow = window;
 			// _glfwGetCursorPosWin32(window,
 				// &_glfw.win32.restoreCursorPosX,
 				// &_glfw.win32.restoreCursorPosY);
+				
 			// updateCursorImage(window);
 			// _glfwCenterCursorInContentArea(window);
-			capture(window);
+#endif
+			auto rect = window.GetClientRect();
+			auto height = rect.get_top() - rect.get_left();
+			auto width = rect.get_bottom() - rect.get_right();
+			set_position(width / 2, height / 2);
 
-			// if (window->rawMouseMotion)
-				// enableRawMouseMotion(window);
+			capture(window);
+#if 0
+			if (raw_input_state == glfw::CursorRawInput::enabled) {
+				mri.reset( new win_cpp::MouseRawInput(window));
+			}
+#endif
 		}
 
 		void enter() {}
@@ -556,6 +568,7 @@ struct Config {
 	}
 };
 
+#if 1
 template<typename UserData> using sysmenucmd_f = std::function<long long(const win_cpp::Window& window, UserData&, win_cpp::PolymorphismByWindows)>;
 template<typename UserData> struct SysMenuCMDcallbacks : std::unordered_map<win_cpp::SystemMenuCommand, sysmenucmd_f<UserData>> {
 	using Base = std::unordered_map<win_cpp::SystemMenuCommand, sysmenucmd_f<UserData>>;
@@ -603,7 +616,7 @@ auto cSC_MOUSEMENU = [](const win_cpp::Window& window, Config& cfg, win_cpp::Pol
 };
 
 auto cSC_KEYMENU = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long {
-		if (!cfg.keymenu.state) {
+	if (!cfg.keymenu.state) {
 		return 0;
 	}
 	return 1;
@@ -697,8 +710,8 @@ auto cWM_PAINT = [](const win_cpp::Window& window, Config& cfg, win_cpp::Polymor
 	return 0;
 };
 
-auto cWM_CLOSE = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		win::f::PostQuitMessage(0);
+auto cWM_CLOSE = [](Config& cfg) -> std::optional<long long>  {
+	win::f::PostQuitMessage(0);
 	return 0;
 };
 
@@ -714,70 +727,52 @@ auto cWM_SIZE = [](const win_cpp::Window& window, Config& cfg, win_cpp::Polymorp
 		return 0;
 };
 
-auto cWM_SIZING = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		auto edges = win_cpp::Edges(windowData.wParam);
-	auto pre_rect = reinterpret_cast<win::t::RECT*>(windowData.lParam);
-	auto rect = win_cpp::Rect(pre_rect->left, pre_rect->top, pre_rect->right, pre_rect->bottom);
-	rect = applyAspectRatio(window, edges, rect, cfg.ar);
-	*pre_rect = static_cast<win_cpp::Rect::type>(rect);
-	cfg.window_rect_callback(glfw::Rect(pre_rect->left, pre_rect->top, pre_rect->right, pre_rect->bottom));
+auto cWM_SIZING = [](Config& cfg, win_cpp::Edges edges, win_cpp::Rect& rect) -> window_proc::result_type  {
+	rect = applyAspectRatio(cfg.window, edges, rect, cfg.ar);
+	cfg.window_rect_callback(glfw::Rect(rect.get_left(), rect.get_top(), rect.get_right(), rect.get_bottom()));
 	return true;
 };
 
-auto cWM_MOUSEACTIVATE = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		if (win::f::HIWORD(windowData.lParam)) {
-		if (win::f::LOWORD(windowData.lParam)) {
+auto cWM_MOUSEACTIVATE = [](Config& cfg, win_cpp::WindowMessage wmsg, win_cpp::HitTest ht) -> window_proc::result_type  {
+	if (wmsg == win_cpp::WindowMessage::WM_LBUTTONDOWN) {
+		if (ht != win_cpp::HitTest::HTCLIENT) {
 			cfg.fa.set_state(glfw::FrameActionState::enabled);
 		}
 	}
-	return win::f::DefWindowProcW(
-		win_cpp::Window::type(window),
-		std::to_underlying(win_cpp::WindowMessage::WM_MOUSEACTIVATE),
-		windowData.wParam,
-		windowData.lParam
-	); // std::to_underlying(win_cpp::MouseActiveRetVal::MA_ACTIVATE);
+	return std::nullopt;
 };
 
-auto cWM_CAPTURECHANGED = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		if (windowData.lParam == 0 && std::to_underlying(cfg.fa.get_state())) {
+auto cWM_CAPTURECHANGED = [](Config& cfg, bool has_parent_window) -> window_proc::result_type {
+	if (!has_parent_window && std::to_underlying(cfg.fa.get_state())) {
 		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
-			cfg.cursor.disable(window);
+			cfg.cursor.disable(cfg.window);
 		}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
-			cfg.cursor.capture(window);
+			cfg.cursor.capture(cfg.window);
 		}
 		cfg.fa.set_state(glfw::FrameActionState::disabled);
 	}
-	return win::f::DefWindowProcW(
-		win_cpp::Window::type(window),
-		std::to_underlying(win_cpp::WindowMessage::WM_MOUSEACTIVATE),
-		windowData.wParam,
-		windowData.lParam
-	);
+	return std::nullopt;
 };
 
-auto cWM_SETFOCUS = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		cfg.focus.isFocused = true;
+auto cWM_SETFOCUS = [](Config& cfg) -> window_proc::result_type {
+	cfg.focus.isFocused = true;
 	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
 		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
-			cfg.cursor.disable(window);
+			cfg.cursor.disable(cfg.window);
 		} else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
-			cfg.cursor.capture(window);
+			cfg.cursor.capture(cfg.window);
 		}
 	}
-	return win::f::DefWindowProcW(
-		win_cpp::Window::type(window),
-		std::to_underlying(win_cpp::WindowMessage::WM_MOUSEACTIVATE),
-		windowData.wParam,
-		windowData.lParam
-	);
+	return std::nullopt;
+	// return 0;
 };
 
-auto cWM_KILLFOCUS = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
+auto cWM_KILLFOCUS = [](Config& cfg) -> window_proc::result_type {
+	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
 		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
-			cfg.cursor.disable(window);
+			cfg.cursor.disable(cfg.window);
 		}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
-			cfg.cursor.capture(window);
+			cfg.cursor.capture(cfg.window);
 		}
 	}
 	if (cfg.monitor.state && cfg.autoIconify) {
@@ -789,7 +784,7 @@ auto cWM_KILLFOCUS = [](const win_cpp::Window& window, Config& cfg, win_cpp::Pol
 };
 
 auto cWM_SYSCOMMAND = [cbs = syscmd_callbacks](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		auto x = static_cast<win_cpp::SystemMenuCommand>(windowData.wParam & 0xfff0);
+	auto x = static_cast<win_cpp::SystemMenuCommand>(windowData.wParam & 0xfff0);
 	auto it = cbs.find(x);
 
 	if (it != cbs.end()) {
@@ -806,7 +801,7 @@ auto cWM_SYSCOMMAND = [cbs = syscmd_callbacks](const win_cpp::Window& window, Co
 };
 
 auto cWM_INPUTLANGCHANGE = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		auto UpdateKeyNames = []() {};
+	auto UpdateKeyNames = []() {};
 	UpdateKeyNames();
 	return win::f::DefWindowProcW(
 		win_cpp::Window::type(window),
@@ -816,8 +811,8 @@ auto cWM_INPUTLANGCHANGE = [](const win_cpp::Window& window, Config& cfg, win_cp
 	);
 };
 
-auto cWM_CHAR = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		// ranges of UTF-16 surrogate pair 
+auto cWM_CHAR = [](Config& cfg, wchar_t character, const window_proc::WindowsCharData& data) -> long long  {
+	// ranges of UTF-16 surrogate pair 
 	constexpr unsigned short SURROGATE_HIGH_START		= 0xD800;
 	constexpr unsigned short SURROGATE_HIGH_END			= 0xDBFF;
 	constexpr unsigned short SURROGATE_LOW_START		= 0xDC00;
@@ -828,44 +823,24 @@ auto cWM_CHAR = [](const win_cpp::Window& window, Config& cfg, win_cpp::Polymorp
 	constexpr int            SURROGATE_SHIFT_BITS		= 10;
 
 	thread_local static wchar_t high_surrogate = 0;
-#if 0
-	if (windowData.wParam >= SURROGATE_HIGH_START && windowData.wParam <= SURROGATE_HIGH_END) {
-		high_surrogate = windowData.wParam;
-	} else {
-		unsigned codepoint = 0;
 
-		if (windowData.wParam >= SURROGATE_LOW_START && windowData.wParam <= SURROGATE_LOW_END) {
-			if(high_surrogate) {
-				codepoint += (high_surrogate - SURROGATE_HIGH_START) << SURROGATE_SHIFT_BITS;
-				codepoint += windowData.wParam - SURROGATE_LOW_START;
-				codepoint += SURROGATE_OFFSET;
-			}
-		}	else {
-			codepoint = windowData.wParam;
-		}
-
-		high_surrogate = 0;
-		cfg.input.process_Char(codepoint, getKeyMods(), true);
-	}
-#else
-	if (windowData.wParam >= SURROGATE_HIGH_START && windowData.wParam <= SURROGATE_HIGH_END) {
-		high_surrogate = windowData.wParam;
+	if (character >= SURROGATE_HIGH_START && character <= SURROGATE_HIGH_END) {
+		high_surrogate = character;
 	} else {
 		std::pair<wchar_t, wchar_t> charPair;
 
-		if (windowData.wParam >= SURROGATE_LOW_START && windowData.wParam <= SURROGATE_LOW_END) {
+		if (character >= SURROGATE_LOW_START && character <= SURROGATE_LOW_END) {
 			if (high_surrogate != 0) {
-				charPair = { high_surrogate, windowData.wParam };
+				charPair = { high_surrogate, character };
 			} else {
-				charPair = { windowData.wParam, 0 };
+				charPair = { character, 0 };
 			}
 		} else {
-			charPair = { windowData.wParam, 0 };
+			charPair = { character, 0 };
 		}
 		high_surrogate = 0;
 		cfg.input.process_Char(charPair, getKeyMods(), true);
 	}
-#endif
 
 	return 0;
 };
@@ -985,13 +960,11 @@ auto cWM_SYSKEYUP = [](const win_cpp::Window& window, Config& cfg, win_cpp::Poly
 	return 0;
 };
 
-auto cWM_MOUSEMOVE = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-	
+auto cWM_MOUSEMOVE = [](Config& cfg, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> window_proc::result_type  {
+	auto&& [x, y] = m_pos;
 #if 1
-	auto [y, x] = win_cpp::GetMousePosition(windowData.lParam);
-
 	if (!cfg.wmouse.isTracking()) {
-		cfg.wmouse.StartTracking(window, win_cpp::TrackMouseEventFlags::values::TME_LEAVE);
+		cfg.wmouse.StartTracking(cfg.window, win_cpp::TrackMouseEventFlags::values::TME_LEAVE);
 		cfg.cursor.enter();
 	}
 
@@ -1010,7 +983,17 @@ auto cWM_MOUSEMOVE = [](const win_cpp::Window& window, Config& cfg, win_cpp::Pol
 };
 
 auto cWM_INPUT = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long {
+	// auto windowData.lParam;
+	if (cfg.cursor.get_state() != glfw::CursorState::disabled) {
 		return 0;
+	}
+#if 0
+	if (cfg.cursor.get_raw_input_state() != glfw::RawInputState::disabled) {
+		return 0;
+	}
+#endif
+
+	return 0;
 };
 
 auto cWM_LBUTTONDOWN = [](const win_cpp::Window& window, Config& cfg, win_cpp::PolymorphismByWindows&& windowData) -> long long {
@@ -1136,52 +1119,18 @@ auto cWM_EXITMENULOOP = [](const win_cpp::Window& window, Config& cfg, win_cpp::
 	}
 	return 0;
 };
+#endif
 
 
-	template<typename UserData> using callback = std::function<long long(const win_cpp::Window&, UserData&, win_cpp::PolymorphismByWindows)>;
-	template<typename UserData> struct CallbacksHolder : std::unordered_map<win_cpp::WindowMessage, callback<UserData>> {
-		using Base = std::unordered_map<win_cpp::WindowMessage, callback<UserData>>;
-		using Base::Base;
-	};
-
-	CallbacksHolder<Config> callbacks = {
-		{ win_cpp::WindowMessage::WM_PAINT, cWM_PAINT },
-		{ win_cpp::WindowMessage::WM_CREATE, cWM_CREATE },
-		{ win_cpp::WindowMessage::WM_SIZING, cWM_SIZING },
-		{ win_cpp::WindowMessage::WM_SIZE, cWM_SIZE },
-		{ win_cpp::WindowMessage::WM_MOUSEACTIVATE, cWM_MOUSEACTIVATE },
-		{ win_cpp::WindowMessage::WM_CAPTURECHANGED, cWM_CAPTURECHANGED },
-		{ win_cpp::WindowMessage::WM_SETFOCUS, cWM_SETFOCUS },
-		{ win_cpp::WindowMessage::WM_KILLFOCUS, cWM_KILLFOCUS },
-		{ win_cpp::WindowMessage::WM_SYSCOMMAND, cWM_SYSCOMMAND },
-		{ win_cpp::WindowMessage::WM_INPUTLANGCHANGE, cWM_INPUTLANGCHANGE },
-		{ win_cpp::WindowMessage::WM_CHAR, cWM_CHAR },
-		{ win_cpp::WindowMessage::WM_SYSCHAR, cWM_SYSCHAR },
-		{ win_cpp::WindowMessage::WM_UNICHAR, cWM_UNICHAR },
-		{ win_cpp::WindowMessage::WM_KEYDOWN, cWM_KEYDOWN },
-		{ win_cpp::WindowMessage::WM_SYSKEYDOWN, cWM_SYSKEYDOWN },
-		{ win_cpp::WindowMessage::WM_KEYUP, cWM_KEYUP },
-		{ win_cpp::WindowMessage::WM_SYSKEYUP, cWM_SYSKEYUP },
-		{ win_cpp::WindowMessage::WM_MOUSEMOVE, cWM_MOUSEMOVE },
-		{ win_cpp::WindowMessage::WM_MOUSELEAVE, cWM_MOUSELEAVE },
-		{ win_cpp::WindowMessage::WM_MOUSEHWHEEL, cWM_MOUSEHWHEEL },
-		{ win_cpp::WindowMessage::WM_MOUSEWHEEL, cWM_MOUSEVWHEEL },
-		{ win_cpp::WindowMessage::WM_ENTERSIZEMOVE, cWM_ENTERSIZEMOVE },
-		{ win_cpp::WindowMessage::WM_ENTERMENULOOP, cWM_ENTERMENULOOP },
-		{ win_cpp::WindowMessage::WM_EXITSIZEMOVE, cWM_EXITSIZEMOVE },
-		{ win_cpp::WindowMessage::WM_EXITMENULOOP, cWM_EXITMENULOOP },
-		{ win_cpp::WindowMessage::WM_CLOSE, cWM_CLOSE },
-		{ win_cpp::WindowMessage::WM_QUIT, cWM_QUIT },
-		{ win_cpp::WindowMessage::WM_LBUTTONDOWN, cWM_LBUTTONDOWN },
-		{ win_cpp::WindowMessage::WM_RBUTTONDOWN, cWM_RBUTTONDOWN },
-		{ win_cpp::WindowMessage::WM_MBUTTONDOWN, cWM_MBUTTONDOWN },
-		{ win_cpp::WindowMessage::WM_XBUTTONDOWN, cWM_XBUTTONDOWN },
-		{ win_cpp::WindowMessage::WM_LBUTTONUP, cWM_LBUTTONUP },
-		{ win_cpp::WindowMessage::WM_RBUTTONUP, cWM_RBUTTONUP },
-		{ win_cpp::WindowMessage::WM_MBUTTONUP, cWM_MBUTTONUP },
-		{ win_cpp::WindowMessage::WM_XBUTTONUP, cWM_XBUTTONUP }
-	};
-
+void setup_callbacks(Config& cfg) {
+	window_proc::WM_SIZING_callback = [&cfg](win_cpp::Edges edges, win_cpp::Rect& rect) { return std::invoke(cWM_SIZING, cfg, edges, rect); };
+	window_proc::WM_MOUSEACTIVATE_callback = [&cfg](win_cpp::WindowMessage wmsg, win_cpp::HitTest ht) { return std::invoke(cWM_MOUSEACTIVATE, cfg, wmsg, ht); };
+	window_proc::WM_CAPTURECHANGED_callback = [&cfg](bool has_parent_window) { return std::invoke(cWM_CAPTURECHANGED, cfg, has_parent_window); };
+	window_proc::WM_SETFOCUS_callback = [&cfg]() { return std::invoke(cWM_SETFOCUS, cfg); };
+	window_proc::WM_KILLFOCUS_callback = [&cfg]() { return std::invoke(cWM_KILLFOCUS, cfg); };
+	window_proc::WM_CHAR_callback = [&cfg](wchar_t character, const window_proc::WindowsCharData& data) { return std::invoke(cWM_CHAR, cfg, character, data); };
+	window_proc::WM_MOUSEMOVE_callback = [&cfg](const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) { return std::invoke(cWM_MOUSEMOVE, cfg, m_pos, m_botton_down); };
+}
 
 win_cpp::MainClassCreateInfo get_mainclass_info(const win_cpp::Instance& instance) {
 	win_cpp::LoadImageStandardCursorInfo cursor_image_info = {};
@@ -1300,47 +1249,19 @@ namespace win32_window {
 							get_WindowStyle(info),
 							get_WindowStyleEX(info)
 						),
-						callbacks_ = callbacks,
 						userdata_ = std::ref(config)
 					]() mutable
 					{
-						const auto& cbs = callbacks_;
 						auto& userdata = userdata_.get();
 						win_cpp::Window prewnd(window_info);
 						userdata.window = std::move(prewnd);
 						userdata.ready = true;
 						auto& window = userdata.window;
-						auto x = [&cbs, &window, &userdata](win_cpp::WindowMessage wmsg, win_cpp::PolymorphismByWindows&& WindowData) -> long long {
-							auto it = cbs.find(wmsg);
-							if (it != cbs.end()) {
-								auto res = std::invoke(it->second, window, userdata, WindowData);
-								return res;
-							}
-							return win::f::DefWindowProcW(win_cpp::Window::type(window), std::to_underlying(wmsg), WindowData.wParam, WindowData.lParam);
-						};
 
-						using ltype = decltype(x);
-						using ltype_ptr = decltype(&x);
-						win::f::SetPropW(win_cpp::Window::type(window), L"GLFW", (&x));
+						setup_callbacks(userdata);
 
-						auto mywproc = [](
-							win::t::HWND hWnd,
-							win::t::UINT uMsg,
-							win::t::WPARAM wParam,
-							win::t::LPARAM lParam) -> win::t::LRESULT
-						{
-								ltype_ptr lmbd_ptr = static_cast<ltype_ptr>(win::f::GetPropW(hWnd, L"GLFW"));
-								if (lmbd_ptr) {
-									ltype& lmbd = *lmbd_ptr;
-									return lmbd(static_cast<win_cpp::WindowMessage>(uMsg), win_cpp::PolymorphismByWindows{ wParam, lParam });
-								}
-								return win::f::DefWindowProcW(hWnd, uMsg, wParam, lParam);
-						};
-
-						window.SetWindowProc(mywproc);
-#if 1
+						window.SetWindowProc(window_proc::windowProc);
 						window.show();
-#endif
 						win_cpp::Message msg;
 						while (true) {
 							auto wmsg = msg.get_msg();
@@ -1443,3 +1364,34 @@ namespace win32_window {
 	}
 
 } // ns 
+
+#if 0
+{
+	auto x = [&cbs, &window, &userdata](win_cpp::WindowMessage wmsg, win_cpp::PolymorphismByWindows&& WindowData) -> long long {
+		auto it = cbs.find(wmsg);
+		if (it != cbs.end()) {
+			auto res = std::invoke(it->second, window, userdata, WindowData);
+			return res;
+		}
+		return win::f::DefWindowProcW(win_cpp::Window::type(window), std::to_underlying(wmsg), WindowData.wParam, WindowData.lParam);
+		};
+
+	using ltype = decltype(x);
+	using ltype_ptr = decltype(&x);
+	win::f::SetPropW(win_cpp::Window::type(window), L"GLFW", (&x));
+
+	auto mywproc = [](
+		win::t::HWND hWnd,
+		win::t::UINT uMsg,
+		win::t::WPARAM wParam,
+		win::t::LPARAM lParam) -> win::t::LRESULT
+		{
+			ltype_ptr lmbd_ptr = static_cast<ltype_ptr>(win::f::GetPropW(hWnd, L"GLFW"));
+			if (lmbd_ptr) {
+				ltype& lmbd = *lmbd_ptr;
+				return lmbd(static_cast<win_cpp::WindowMessage>(uMsg), win_cpp::PolymorphismByWindows{ wParam, lParam });
+			}
+			return win::f::DefWindowProcW(hWnd, uMsg, wParam, lParam);
+		};
+}
+#endif

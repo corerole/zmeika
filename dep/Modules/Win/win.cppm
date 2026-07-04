@@ -83,6 +83,10 @@ export namespace win {
 		using EXECUTION_STATE = win_def::EXECUTION_STATE;
 		using STARTUPINFOW = win_def::STARTUPINFOW;
 		using TRACKMOUSEEVENT = win_def::TRACKMOUSEEVENT;
+		using PUINT = win_def::PUINT;
+		using RAWMOUSE = win_def::RAWMOUSE;
+		using RAWKEYBOARD = win_def::RAWKEYBOARD;
+		using RAWHID = win_def::RAWHID;
 	}
 	
 	namespace f {

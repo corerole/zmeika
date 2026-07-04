@@ -106,7 +106,7 @@ enum class CW_Flags : unsigned {
 	CW_USEDEFAULT = 0x80000000
 };
 
-enum class WM_Flags {
+enum class WindowMessage {
 	WM_UNKNOWN_ONE = 0xC0CE, // TaskbarButtonCreated created by ShowWindow(, SW_SHOW);
 	WM_ACTIVATE = 0x0006,
 	WM_ACTIVATEAPP = 0x001C,
@@ -1551,6 +1551,44 @@ enum class C_File_Options {
 	FileMode_Random						= 0x00010
 };
 
+enum class RawInputDeviceStructType : unsigned {
+	RID_INPUT               = 0x10000003,
+	RID_HEADER              = 0x10000005,
+};
+
+
+enum class HitTest : int {
+	HTERROR            = (-2),
+	HTTRANSPARENT      = (-1),
+	HTNOWHERE          = 0,
+	HTCLIENT           = 1,
+	HTCAPTION          = 2,
+	HTSYSMENU          = 3,
+	HTGROWBOX          = 4,
+	HTSIZE             = HTGROWBOX,
+	HTMENU             = 5,
+	HTHSCROLL          = 6,
+	HTVSCROLL          = 7,
+	HTMINBUTTON        = 8,
+	HTMAXBUTTON        = 9,
+	HTLEFT             = 10,
+	HTRIGHT            = 11,
+	HTTOP              = 12,
+	HTTOPLEFT          = 13,
+	HTTOPRIGHT         = 14,
+	HTBOTTOM           = 15,
+	HTBOTTOMLEFT       = 16,
+	HTBOTTOMRIGHT      = 17,
+	HTBORDER           = 18,
+	HTREDUCE           = HTMINBUTTON,
+	HTZOOM             = HTMAXBUTTON,
+	HTSIZEFIRST        = HTLEFT,
+	HTSIZELAST         = HTBOTTOMRIGHT,
+	HTOBJECT           = 19,
+	HTCLOSE            = 20,
+	HTHELP             = 21,
+};
+
 namespace win {
 	export namespace e {
 		using WindowStyle = flags::Flags<Window_Style>;
@@ -1565,7 +1603,7 @@ namespace win {
 		using MultimonitorAPI = DW_Flags;
 		using CW = CW_Flags;
 		using ShowWindowCommands = SW_Flags;
-		using WM = WM_Flags;
+		using WindowMessage = WindowMessage;
 		using WC = WC;
 		using SystemMetrics = SM;
 		using BrushColor = COLOR;
@@ -1589,7 +1627,7 @@ namespace win {
 		using WindowFieldsOffset = GWL;
 		using WindowZOrder = WindowZOrder;
 		using SetWindowPosFlags = flags::Flags<SWP>;
-		using RawInputDevFunc = RIDEV;
+		using RawInputDevFunc = flags::Flags<RIDEV>;
 		using MouseActiveRetVal = MA;
 		using DWM_BlurBehindFlags = flags::Flags<DWM_BB>;
 		using ExecutionState = flags::Flags<ES>;
@@ -1600,5 +1638,7 @@ namespace win {
 		using TrackMouseEventFlags = flags::Flags<TrackMouseEvent>;
 		using MouseKeysFlags = flags::Flags<MouseKeys>;
 		using C_File_Options = C_File_Options;
+		using RawInputDeviceStructType = RawInputDeviceStructType;
+		using HitTest = HitTest;
 	}
 }

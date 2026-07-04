@@ -639,11 +639,6 @@ export namespace vkCube {
 			vk::raii::DescriptorSet desc_set;
 			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> ubo_buffer_and_mem;
 
-		private:
-			vkCube::data::UBO update_ubo(const vk::Extent2D& extent, const std::pair<float, float>& m_pos) {
-				return ubo_obj.update(extent, m_pos);
-			}
-
 		public:
 			vkUBO_T(
 				const vk::raii::Device& logical_device,
@@ -682,8 +677,16 @@ export namespace vkCube {
 			}
 
 		public:
-			void update(const vk::Extent2D& extent, const std::pair<float, float>& m_pos) {
-				auto ubo = update_ubo(extent, m_pos);
+			void update_extent(const vk::Extent2D& extent) { 
+				ubo_obj.update_hw(extent.height, extent.width);
+			}
+
+			void update_mouse_position(const std::pair<float, float>& m_pos) {
+				ubo_obj.update_mouse_pos(m_pos);
+			}
+
+			void update_device_buffer() {
+				auto ubo = ubo_obj.get_ubo();
 
 				void* uboPtr = ubo_buffer_and_mem.second.mapMemory(0, sizeof(decltype(ubo)));
 				std::memcpy(uboPtr, &ubo, sizeof(ubo));

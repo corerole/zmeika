@@ -30,7 +30,7 @@ export namespace win_cpp {
 	using OSVersionFlags = win::e::OSVersionFlags;
 	using SetWindowPosFlags = win::e::SetWindowPosFlags;
 	using WindowZOrder = win::e::WindowZOrder;
-	using WindowMessage = win::e::WM;
+	using WindowMessage = win::e::WindowMessage;
 	using RawInputDevFunc = win::e::RawInputDevFunc;
 	using HIDUsagePage = win::e::HID::HIDUsagePage;
 	using MouseActiveRetVal = win::e::MouseActiveRetVal;
@@ -46,6 +46,9 @@ export namespace win_cpp {
 	using MouseKeysFlags = win::e::MouseKeysFlags;
 	using C_File_Options = win::e::C_File_Options;
 	namespace hid = win::e::HID;
+	using RawInputDeviceStructType = win::e::RawInputDeviceStructType;
+	using RawInputDeviceType = win::e::RawInputDeviceType;
+	using HitTest = win::e::HitTest;
 
 	win::t::LRESULT windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) {
 		return win::f::DefWindowProcW(static_cast<win::t::HWND>(hWnd), uMsg, wParam, lParam);
@@ -85,8 +88,8 @@ export namespace win_cpp {
 	}
 
 	std::pair<short, short> GetMousePosition(long long lParam) {
-		auto x = win::f::HIWORD(lParam);
-		auto y = win::f::LOWORD(lParam);
+		auto x = win::f::LOWORD(lParam);
+		auto y = win::f::HIWORD(lParam);
 		return std::make_pair(x, y);
 	}
 
@@ -662,8 +665,8 @@ export namespace win_cpp {
 	struct Monitor;
 	struct Rect;
 	template<typename T> concept AllowedEnum = std::true_type::value;
-//	void RegisterRawInputDevice(const Window& window, RawInputDevFunc dev_func, HIDUsagePage usage_page, AllowedEnum auto hid_usage);
 
+	// void RegisterRawInputDevice(const Window& window, RawInputDevFunc dev_func, HIDUsagePage usage_page, AllowedEnum auto hid_usage);
 	
 	struct StandardInput {
 		using type = win::t::HANDLE;
@@ -713,7 +716,7 @@ export namespace win_cpp {
 	public:
 		Window() : window_handle(nullptr) {}
 		Window(const WindowCreateInfo& info) : window_handle(CreateWindowExW(info)) {
-			// win::f::SetPropW(window_handle, L"GLFW", this);
+			win::f::SetPropW(window_handle, L"INITAL", this);
 		}
 
 		~Window() {
@@ -745,9 +748,8 @@ export namespace win_cpp {
 		}
 
 		void SetWindowPosition(WindowZOrder w_order, win_cpp::Rect rect, SetWindowPosFlags PosFlags) const;
-
+#if 0
 		void RegisterRawInputDevice(HIDUsagePage usage_page, AllowedEnum auto hid_usage, RawInputDevFunc dev_func) const {
-			// RegisterRawInputDevice(*this, dev_func, usage_page, hid_usage);
 			win::t::RAWINPUTDEVICE rid = {};
 			rid.usUsagePage = std::to_underlying(usage_page);
 			rid.usUsage = std::to_underlying(hid_usage);
@@ -759,7 +761,7 @@ export namespace win_cpp {
 				throw;
 			}
 		}
-
+#endif
 		void set_Title(const win_cpp::Title& title);
 		win_cpp::Title get_Title() const;
 
@@ -999,12 +1001,11 @@ export namespace win_cpp {
 		return win_cpp::IsThePointCapturedByTheWindowRegion(*this, x, y);
 	}
 
-#if 0
 	void RegisterRawInputDevice(const Window& window, RawInputDevFunc dev_func, HIDUsagePage usage_page, AllowedEnum auto hid_usage) {
 		win::t::RAWINPUTDEVICE rid = {
 			.usUsagePage = std::to_underlying(usage_page),
 			.usUsage = std::to_underlying(hid_usage),
-			.dwFlags = std::to_underlying(dev_func),
+			.dwFlags = RawInputDevFunc::MaskType(dev_func),
 			.hwndTarget = Window::type(window)
 		};
 		auto res = win::f::RegisterRawInputDevices(&rid, 1, sizeof(rid));
@@ -1012,11 +1013,125 @@ export namespace win_cpp {
 			throw;
 		}
 	}
+
+	void UnRegisterRawInputDevice(HIDUsagePage usage_page, AllowedEnum auto hid_usage) {
+		constexpr win_cpp::RawInputDevFunc v = win_cpp::RawInputDevFunc::values::RIDEV_REMOVE;
+		constexpr auto flag = win_cpp::RawInputDevFunc::MaskType(v);
+		win::t::RAWINPUTDEVICE rid = {
+			.usUsagePage = std::to_underlying(usage_page),
+			.usUsage = std::to_underlying(hid_usage),
+			.dwFlags = flag,
+			.hwndTarget = nullptr
+		};
+
+		auto res = win::f::RegisterRawInputDevices(&rid, 1, sizeof(rid));
+		if (!res) {
+			throw;
+		}
+	}
+
+#if 0
+	template<win_cpp::RawInputDeviceType dev_type>
+	struct RawInputDevice {
+			using type = win::t::HANDLE;
+			explicit operator type() const { return dev_handle; }
+
+		private:
+			type dev_handle;
+
+		public:
+			RawInputDevice(type h) : dev_handle(h) {}
+	};
+
+	struct MouseRawInputDevice : RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEMOUSE> {
+		using Base = RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEMOUSE>;
+		
+		private:
+
+
+		public:
+			MouseRawInputDevice(Base&& b) : Base(b) {}
+
+		public:
+
+	};
+
+	struct KeyboardRawInputDevice : RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEKEYBOARD> {
+		using Base = RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEKEYBOARD>;
+
+		private:
+
+
+		public:
+			KeyboardRawInputDevice(Base&& b) : Base(b) {}
+
+		public:
+	};
+
+	struct HIDRawInputDevice : RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEHID> {
+		using Base = RawInputDevice<win_cpp::RawInputDeviceType::RIM_TYPEHID>;
+		
+		private:
+
+
+		public:
+			HIDRawInputDevice(Base&& b) : Base(b) {}
+
+		public:
+
+	};
 #endif
 
+#if 0
+	using RawInputHandle = win::t::HRAWINPUT;
+	struct RawInputDeviceData {
+		win_cpp::RawInputDeviceType type;
+		
+	};
+	
+	RawInputDeviceData GetRawInputData(RawInputHandle handle, RawInputDeviceStructType uiCommand) {
+		unsigned size = 0;
+		win::t::RAWINPUT* data = nullptr;
+
+		win::t::HRAWINPUT hRawInput = handle;
+		win::t::UINT uiCommand_ = std::to_underlying(uiCommand);
+
+		constexpr win::t::UINT cbSizeHeader = sizeof(win::t::RAWINPUTHEADER);
+		std::ignore = win::f::GetRawInputData(hRawInput, uiCommand_, data, &size, cbSizeHeader);
+		std::ignore = win::f::GetRawInputData(hRawInput, uiCommand_, data, &size, cbSizeHeader);
+
+		constexpr unsigned MouseStructSize = sizeof(win::t::RAWMOUSE);
+		constexpr unsigned KeyboardStructSize = sizeof(win::t::RAWKEYBOARD);
+		constexpr unsigned HIDStructSize = sizeof(win::t::RAWHID);
+		
+		RawInputDeviceData ri_data = {
+			/* TODO */
+		};
+
+		return ri_data;
+	}
+#endif
+
+
+
+	struct MouseRawInput {
+		public:
+			MouseRawInput(const Window& window) {
+				auto dev_func = win_cpp::RawInputDevFunc{};
+				auto usage_page = win_cpp::hid::HIDUsagePage::GENERIC;
+				auto hid_usage = win_cpp::hid::HID_USAGE_GENERIC::MOUSE;
+				RegisterRawInputDevice(window, dev_func, usage_page, hid_usage);
+			}
+
+			~MouseRawInput() {
+				auto usage_page = win_cpp::hid::HIDUsagePage::GENERIC;
+				auto hid_usage = win_cpp::hid::HID_USAGE_GENERIC::MOUSE;
+				UnRegisterRawInputDevice(usage_page, hid_usage);
+			}
+	};
+
+
 	struct MonitorInfo;
-
-
 	struct Monitor {
 		using type = win::t::HMONITOR;
 		explicit operator type() const { return monitor_handle; }
