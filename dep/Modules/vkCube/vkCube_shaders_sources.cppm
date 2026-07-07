@@ -3,6 +3,9 @@ module;
 export module vkCube_shaders_sources;
 import std;
 
+namespace vkCube {
+  export namespace shaders_sources {
+
 constexpr std::string_view vert(
 R"(
 #version 450
@@ -45,9 +48,5 @@ void main()
 }
 )");
 
-namespace vkCube {
-  export namespace shaders_sources {
-    using ::frag;
-    using ::vert;
   }
 }

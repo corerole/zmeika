@@ -3,6 +3,9 @@ module;
 export module vkCube_shaders_data;
 import std;
 
+namespace vkCube {
+	export namespace shaders_data {
+
 constexpr std::array<float, 72> vVertices = {
 	// front
 	-1.0f, -1.0f, +1.0f, // point blue
@@ -117,11 +120,6 @@ constexpr std::array<unsigned short, 36> vIndices = {
 	20, 21, 22, 21, 23, 22
 };
 
-namespace vkCube {
-	export namespace shaders_data {
-		using ::vColors;
-		using ::vNormals;
-		using ::vVertices;
-		using ::vIndices;
+
 	}
 }

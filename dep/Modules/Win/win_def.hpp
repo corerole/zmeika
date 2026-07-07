@@ -1,38 +1,26 @@
-﻿#include <string>
-#include <string_view>
+﻿#include<string_view>
+#include<windows.h>
+#include<windef.h>
+#include<sdkddkver.h>
+#include<wingdi.h>
+#include<winuser.h>
+#include<xinput.h>
+#include<dwmapi.h>
+#include<shellscalingapi.h>
+#include<strsafe.h>
+#include<wingdi.h>
+#include<io.h>
+#include<fcntl.h>
+#include<stdio.h>
 
-#if 0
-template<typename Ftype>
-Ftype get_function_address(win_def::HMODULE handle, std::string_view f_name) {
-	win_def::FARPROC procAddress = win_def::GetProcAddress(handle, f_name.data());
-	if (!procAddress) { return nullptr; }
-	return reinterpret_cast<Ftype>(procAddress);
+inline void set_stdio_mode(int x) noexcept {
+	_setmode(_fileno(stdout), x);
 }
-#endif
 
-namespace win_def {
-	#include<windows.h>
-	#include<windef.h>
-	#include<sdkddkver.h>
-	#include<wingdi.h>
-	#include<winuser.h>
-	#include<xinput.h>
-	#include<dwmapi.h>
-	#include<shellscalingapi.h>
-	#include<strsafe.h>
-	#include<wingdi.h>
-	#include<io.h>
-	#include<fcntl.h>
-	#include<stdio.h>
-
-	inline void set_stdio_mode(int x) noexcept {
-		_setmode(_fileno(stdout), x);
-	}
-
-	win_def::HMODULE my_module_loader(std::wstring_view mod_name) {
-		win_def::HMODULE module_ = win_def::GetModuleHandleW(mod_name.data());
+	HMODULE my_module_loader(std::wstring_view mod_name) {
+		HMODULE module_ = GetModuleHandleW(mod_name.data());
 		if (!module_) {
-			module_ = win_def::LoadLibraryW(L"ntdll.dll");
+			module_ = LoadLibraryW(L"ntdll.dll");
 			if (!module_) {
 				abort();
 			}
@@ -46,12 +34,12 @@ namespace win_def {
 	constexpr std::wstring_view n_user32 = L"user32.dll";
 	constexpr std::wstring_view n_xinput = L"xinput.dll";
 	constexpr std::wstring_view n_dinput8 = L"dinput8.dll";
-	win_def::HMODULE m_ntdll = my_module_loader(n_ntdll);
-	win_def::HMODULE m_shcore = my_module_loader(n_shcore);
-	win_def::HMODULE m_dwmapi = my_module_loader(n_dwmapi);
-	win_def::HMODULE m_user32 = my_module_loader(n_user32);
-	win_def::HMODULE m_xinput = my_module_loader(n_xinput);
-	win_def::HMODULE m_dinput8 = my_module_loader(n_dinput8);
+	HMODULE m_ntdll = my_module_loader(n_ntdll);
+	HMODULE m_shcore = my_module_loader(n_shcore);
+	HMODULE m_dwmapi = my_module_loader(n_dwmapi);
+	HMODULE m_user32 = my_module_loader(n_user32);
+	HMODULE m_xinput = my_module_loader(n_xinput);
+	HMODULE m_dinput8 = my_module_loader(n_dinput8);
 
 
 	// xinput.dll
@@ -62,7 +50,7 @@ namespace win_def {
 
 	// dinput8.dll function pointer usings
 	using PFN_DirectInput8Create = HRESULT(WINAPI*)(HINSTANCE, DWORD, REFIID, LPVOID*, LPUNKNOWN);
-	PFN_DirectInput8Create DirectInput8Create = (PFN_DirectInput8Create)win_def::GetProcAddress(m_dinput8, "DirectInput8Create");
+	PFN_DirectInput8Create DirectInput8Create = (PFN_DirectInput8Create)GetProcAddress(m_dinput8, "DirectInput8Create");
 
 	// user32.dll function pointer usings
 	using PFN_EnableNonClientDpiScaling = BOOL(WINAPI*)(HWND);
@@ -95,6 +83,5 @@ namespace win_def {
 	// ntdll.dll function pointer usings
 	using PFN_RtlVerifyVersionInfo = NTSTATUS(NTAPI*)(PRTL_OSVERSIONINFOEXW VersionInfo, ULONG TypeMask, ULONGLONG ConditionMask);
 	using PFN_RtlGetVersion = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
-	PFN_RtlVerifyVersionInfo RtlVerifyVersionInfo = (PFN_RtlVerifyVersionInfo)win_def::GetProcAddress(m_ntdll, "RtlVerifyVersionInfo");
-	PFN_RtlGetVersion RtlGetVersion = (PFN_RtlGetVersion)win_def::GetProcAddress(m_ntdll, "RtlGetVersion");
-}
+	PFN_RtlVerifyVersionInfo RtlVerifyVersionInfo = (PFN_RtlVerifyVersionInfo)GetProcAddress(m_ntdll, "RtlVerifyVersionInfo");
+	PFN_RtlGetVersion RtlGetVersion = (PFN_RtlGetVersion)GetProcAddress(m_ntdll, "RtlGetVersion");

@@ -19,11 +19,12 @@ export namespace glfw {
 
 	struct Rect;
 
-	using CharModsCallbackF = std::function<void(const std::pair<wchar_t, wchar_t>&, CharModsFlags)>;
-	using CharacterCallbackF = std::function<void(const std::pair<wchar_t, wchar_t>&)>;
+	using CharModsCallbackF = std::function<void(unsigned, CharModsFlags)>;
+	using CharacterCallbackF = std::function<void(unsigned)>;
 	using KeyCallbackF = std::function<void(Key, unsigned, KeyState, CharModsFlags)>;
 
 	using WindowRectCallbackF = std::function<void(const glfw::Rect&)>;
+	using WindowCloseCallbackF = std::function<void()>;
 
 	using CursorStateCallbackT = std::function<void(const glfw::CursorState&)>;
 	using CursorPositionCallbackT = std::function<void(const std::pair<int, int>&)>;
@@ -38,7 +39,8 @@ export namespace glfw {
 		KeyCallbackF&& kc,
 		CursorStateCallbackT&& csct,
 		CursorPositionCallbackT&& cpct,
-		WindowRectCallbackF&& wrc
+		WindowRectCallbackF&& wrc,
+		WindowCloseCallbackF&& wcc 
 		)
 	{
 		{ WindowType(cfg) };
@@ -49,6 +51,7 @@ export namespace glfw {
 		{ window.set_cursor_position_callback(std::forward<decltype(cpct)>(std::move(cpct))) } -> std::same_as<void>;
 		{ window.set_cursor_state_callback(std::forward<decltype(csct)>(std::move(csct))) } -> std::same_as<void>;
 		{ window.set_window_rect_callback(std::forward<decltype(wrc)>(std::move(wrc))) } -> std::same_as<void>;
+		{ window.set_window_close_callback(std::forward<decltype(wcc)>(std::move(wcc))) } -> std::same_as<void>;
 	};
 
 	struct wResizable {
@@ -327,6 +330,9 @@ export namespace glfw {
 			void set_window_rect_callback(glfw::WindowRectCallbackF&& wrb) {
 				window.set_window_rect_callback(std::forward<decltype(wrb)>(wrb));
 			}
+			void set_window_close_callback(glfw::WindowCloseCallbackF&& wcc) {
+				window.set_window_close_callback(std::forward<decltype(wcc)>(wcc));
+			}
 	};
 
 	template<typename ValueType>
@@ -352,7 +358,7 @@ export namespace glfw {
 	struct AspectRatio {
 		using value_type = float;
 		using ValueHolder = glfw_enums::AspectRaitoFormatsMapType;
-		using AR_type = AR <value_type>;
+		using AR_type = AR<value_type>;
 		private:
 			ValueHolder val = glfw_enums::AspectRatioStandardFormats;
 			AspectRatioFormats formats = AspectRatioFormats::Square;

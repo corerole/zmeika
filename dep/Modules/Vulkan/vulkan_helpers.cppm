@@ -132,10 +132,10 @@ namespace vk {
 			vk::DeviceCreateInfo createInfo{};
 			createInfo.sType = vk::StructureType::eDeviceCreateInfo;
 			createInfo.flags = vk::DeviceCreateFlags();
-			createInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
+			createInfo.queueCreateInfoCount = (unsigned)queueCreateInfos.size();
 			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 			createInfo.pEnabledFeatures = &deviceFeatures;
-			createInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
+			createInfo.enabledExtensionCount = (unsigned)deviceExtensions.size();
 			createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
 			return vk::raii::Device(PhysicalDevice, createInfo);
@@ -219,9 +219,14 @@ namespace vk {
 
 			unsigned queueFamilyIndices[] = { GraphicsFamily, PresentFamily };
 			vk::SurfaceCapabilitiesKHR capabilities = PhysDevice.getSurfaceCapabilitiesKHR(Surface);
-			vk::PresentModeKHR presentMode = vk::PresentModeKHR::eFifo; // create_PresentModeKHR(PhysDevice, Surface);
-
-			unsigned ImageCount = capabilities.minImageCount;
+			vk::PresentModeKHR presentMode = vk::PresentModeKHR::eImmediate;
+				// vk::PresentModeKHR::eMailbox;
+				// create_PresentModeKHR(PhysDevice, Surface);
+				// vk::PresentModeKHR::eFifoRelaxed;
+				// vk::PresentModeKHR::eFifo;
+				
+			// unsigned ImageCount = capabilities.minImageCount;
+			unsigned ImageCount = 5;
 			if (capabilities.maxImageCount > 0 && ImageCount > capabilities.maxImageCount) {
 				ImageCount = capabilities.maxImageCount;
 			}
@@ -429,7 +434,7 @@ namespace vk {
 			const vk::raii::Device& Device,
 			const vk::Format& SwapchainImageFormat,
 			const ArrayLike auto& SwapchainImages,
-			std::vector<vk::raii::ImageView>& SwapchainImageViews
+			ArrayLike auto& SwapchainImageViews
 		) {
 			SwapchainImageViews.clear();
 			unsigned ImageCount = (unsigned)SwapchainImages.size();
@@ -459,11 +464,11 @@ namespace vk {
 		}
 
 		void set_SwapchainFramebuffers(
-			std::vector<vk::raii::Framebuffer>& SwapchainFramebuffers,
+			ArrayLike auto& SwapchainFramebuffers,
 			const vk::raii::Device& Device,
 			const vk::raii::RenderPass& RenderPass,
 			const vk::Extent2D& SwapchainExtent,
-			const std::vector<vk::raii::ImageView>& SwapchainImageViews,
+			const ArrayLike auto& SwapchainImageViews,
 			const vk::raii::ImageView& ColorImageViews,
 			const vk::raii::ImageView& DepthImageView
 		) {
@@ -555,11 +560,11 @@ namespace vk {
 					const vk::raii::SwapchainKHR& swapchain,
 					const vk::raii::Queue& graphics_queue,
 					const vk::raii::Queue& present_queue,
-					const std::vector<vk::raii::CommandBuffer>& command_buffers,
-					const std::vector<vk::raii::Framebuffer>& framebuffers,
+					const ArrayLike auto& command_buffers,
+					const ArrayLike auto& framebuffers,
 					const std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>& update_command_buffer
 				) {
-					constexpr unsigned timeout_U = std::numeric_limits<std::uint64_t>::max();
+					constexpr std::uint64_t timeout_U = std::numeric_limits<std::uint64_t>::max();
 					std::ignore = device.waitForFences(*InFlightFences[CurrentFrame], 1u, timeout_U);
 
 					vk::AcquireNextImageInfoKHR acquireInfo(
@@ -571,7 +576,7 @@ namespace vk {
 						nullptr // pnext
 					);
 
-					vk::ResultValue<uint32_t> ret = device.acquireNextImage2KHR(acquireInfo);
+					vk::ResultValue<unsigned> ret = device.acquireNextImage2KHR(acquireInfo);
 					vk::Result result(ret.result);
 					unsigned imageIndex = ret.value;
 
@@ -607,7 +612,7 @@ namespace vk {
 
 					std::array<vk::SwapchainKHR, 1> sa = { *swapchain };
 					std::array<vk::Result, 1> result_present_info = { vk::Result::eSuccess };
-					uint32_t image_indices[] = { imageIndex };
+					unsigned image_indices[] = { imageIndex };
 					vk::PresentInfoKHR presentInfo(
 						signalSemaphores,
 						sa,

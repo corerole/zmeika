@@ -51,17 +51,12 @@ namespace vkCube {
 					width = new_width;
 				}
 
-				void update_mouse_pos(const std::pair<float, float>& dxy) {
-					auto&& [dx, dy] = dxy;
-					m_yaw += glm::radians(dx);
-					m_pitch += glm::radians(dy);
-					
-					m_pitch = glm::clamp(m_pitch, -PITCH_LIMIT, PITCH_LIMIT);
-
+			private:
+				void update_matrices() {
 					glm::vec3 forward;
-					forward.x = cos(m_yaw) * cos(m_pitch);
-					forward.y = sin(m_pitch);
-					forward.z = sin(m_yaw) * cos(m_pitch);
+					forward.x = std::cos(m_yaw) * std::cos(m_pitch);
+					forward.y = std::sin(m_pitch);
+					forward.z = std::sin(m_yaw) * std::cos(m_pitch);
 					forward = glm::normalize(forward);
 
 					glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -73,15 +68,42 @@ namespace vkCube {
 					glm::mat4 model = glm::mat4(1.0f);
 					ubo.modelview = view * model;
 
-					auto aspect = width / height;
+					float aspect = width / height;
 					glm::mat4 projection = glm::gtc::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 					ubo.modelviewprojection = projection * ubo.modelview;
 
 					glm::mat3 normalMatrix = glm::gtc::transpose(glm::inverse(glm::mat3(ubo.modelview)));
-					for (int i = 0; i < 3; ++i) {
-						ubo.normal[i] = glm::vec4(normalMatrix[i], 0.0f);
-					}
+					ubo.normal[0] = glm::vec4(normalMatrix[0], 0.0f);
+					ubo.normal[1] = glm::vec4(normalMatrix[1], 0.0f);
+					ubo.normal[2] = glm::vec4(normalMatrix[2], 0.0f);
 				}
+
+			public:
+				void update_angles_by_delta(const std::pair<float, float>& dxy) {
+					auto&& [dx, dy] = dxy;
+					m_yaw += glm::radians(dx);
+					m_pitch += glm::radians(dy);
+					m_pitch = glm::clamp(m_pitch, -PITCH_LIMIT, PITCH_LIMIT);
+					update_matrices();
+				}
+
+				void update_position_by_delta(float dx, float dy, float dz) {
+					glm::vec3 forward;
+					forward.x = std::cos(m_yaw) * std::cos(m_pitch);
+					forward.y = std::sin(m_pitch);
+					forward.z = std::sin(m_yaw) * std::cos(m_pitch);
+					forward = glm::normalize(forward);
+
+					glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+					// glm::vec3 up = glm::normalize(glm::cross(right, forward));
+					glm::vec3 right = glm::normalize(glm::cross(forward, worldUp));
+					glm::vec3 delta = right * dx + forward * dz + worldUp * dy;
+					// glm::vec3 delta = right * dx + forward * dz + up * dy;
+
+					m_position += delta;
+					update_matrices();
+				}
+
 
 				vkCube::data::UBO get_ubo() {
 					return ubo;

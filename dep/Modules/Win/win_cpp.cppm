@@ -50,12 +50,25 @@ export namespace win_cpp {
 	using RawInputDeviceType = win::e::RawInputDeviceType;
 	using HitTest = win::e::HitTest;
 
+	using win::f::PostQuitMessage;
+	
+	template<typename T> concept is_pointer = std::is_pointer_v<T>;
+
+
+	using win::f::GetPropW; // REMOVE IT
+	using win::t::HWND; // REMOVE IT
+	using win::t::UINT; // REMOVE IT
+	using win::t::WPARAM; // REMOVE IT
+	using win::t::LPARAM; // REMOVE IT
+	using win::t::LRESULT; // REMOVE IT
+	using win::t::HINSTANCE; // REMOVE IT
+
 	win::t::LRESULT windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) {
 		return win::f::DefWindowProcW(static_cast<win::t::HWND>(hWnd), uMsg, wParam, lParam);
 	}
 
 	void SetStdOutMode(C_File_Options mode) {
-		win::f::set_stdio_mode(std::to_underlying(mode));
+//		win::f::set_stdio_mode(std::to_underlying(mode));
 	}
 
 	bool SystemParametersInfoUnicode(win_cpp::SystemParametersInfoValues uiAction, unsigned uiParam, void* pvParam, unsigned fWinIni) {
@@ -67,8 +80,6 @@ export namespace win_cpp {
 		unsigned long long wParam;
 		long long lParam;
 	};
-
-	const win::t::GUID _glfw_GUID_DEVINTERFACE_HID = { 0x4d1e55b2,0xf16f,0x11cf,{0x88,0xcb,0x00,0x11,0x11,0x00,0x00,0x30} };
 
 	int GetKeyState(VirtualKeysStandardSet key) {
 		return win::f::GetKeyState(std::to_underlying(key));
@@ -861,6 +872,10 @@ export namespace win_cpp {
 #endif
 	};
 
+	void SetPropW(const Window& window, std::wstring_view name, is_pointer auto p) {
+		auto res = win::f::SetPropW(win_cpp::Window::type(window), name.data(), p);
+		if (!res) { throw; }
+	}
 
 	win_cpp::Title GetWindowTextUnicode(const win_cpp::Window& window) {
 		auto size = win::f::GetWindowTextLengthW(win_cpp::Window::type(window));

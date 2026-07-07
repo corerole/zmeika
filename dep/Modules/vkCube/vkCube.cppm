@@ -266,8 +266,8 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
-	uint32_t x = 0;
-	uint32_t y = 0;
+	unsigned x = 0;
+	unsigned y = 0;
 	vk::Offset2D offset(x, y);
 
 	vk::Rect2D scissor{};
@@ -681,8 +681,12 @@ export namespace vkCube {
 				ubo_obj.update_hw(extent.height, extent.width);
 			}
 
-			void update_mouse_position(const std::pair<float, float>& m_pos) {
-				ubo_obj.update_mouse_pos(m_pos);
+			void update_angles_by_delta(const std::pair<float, float>& m_pos) {
+				ubo_obj.update_angles_by_delta(m_pos);
+			}
+
+			void update_position_by_delta(float dx, float dy, float dz) {
+				ubo_obj.update_position_by_delta(dx, dy, dz);
 			}
 
 			void update_device_buffer() {
