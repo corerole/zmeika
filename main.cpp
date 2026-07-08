@@ -104,9 +104,6 @@ void foo() {
 }
 #endif
 
-std::atomic<bool> ready{ false };
-std::atomic<bool> called{ false };
-
 int main() {
 	glfw::WindowCreateInfo info = {};
 	info.title = glfw::Title(AppName);
@@ -120,6 +117,8 @@ int main() {
 	window.set_cursor_position_callback(std::move([&m_pos](const std::pair<long, long>& pos) { m_pos = pos; }));
 	window.set_cursor_state_callback(std::move(x_cursor_state_default_callback));
 
+	std::atomic<bool> ready{ false };
+	std::atomic<bool> called{ false };
 	auto close_callback = [r_ready = std::ref(ready), r_called = std::ref(called)]() {
 		auto& ready = r_ready.get();
 		auto& called = r_called.get();
@@ -128,7 +127,6 @@ int main() {
 			std::this_thread::yield();
 		}
 	};
-
 	window.set_window_close_callback(std::move(close_callback));
 
 	{
@@ -157,13 +155,27 @@ int main() {
 
 		glfw::WindowRectCallbackF rect_callback = [&glfw_rect](const glfw::Rect& rect) {
 			glfw_rect = rect;
-			};
+		};
 		window.set_window_rect_callback(std::move(rect_callback));
 
 		auto update_extent = [&glfw_rect, &extent, &physical_device, &surface]() {
-#if 0
-			unsigned width = glfw_rect.get_right() - glfw_rect.get_left();
-			unsigned height = glfw_rect.get_bottom() - glfw_rect.get_top();
+#if 1
+			auto get_wh = [&glfw_rect]() {
+				unsigned width = glfw_rect.get_right() - glfw_rect.get_left();
+				unsigned height = glfw_rect.get_bottom() - glfw_rect.get_top();
+				return std::pair{std::move(width), std::move(height)};
+			};
+			auto pwh = get_wh();
+			std::this_thread::sleep_for(100ms);
+			auto nwh = get_wh();
+			while ((pwh.first != nwh.first) || (pwh.second) != (nwh.second)) {
+				pwh = nwh;
+				std::this_thread::sleep_for(100ms);
+				nwh = get_wh();
+			}
+			auto& width = nwh.first;
+			auto& height = nwh.second;
+			
 			vk::SurfaceCapabilitiesKHR capabilities = physical_device.getSurfaceCapabilitiesKHR(surface);
 			extent.width = vk::supp::myclamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 			extent.height = vk::supp::myclamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -172,7 +184,47 @@ int main() {
 #endif
 			};
 
-		vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent);
+		auto choice_present_mode = [&physical_device, &surface]() -> vk::PresentModeKHR {
+			auto presentModes = physical_device.getSurfacePresentModesKHR(surface);
+			auto is_avaible = [&presentModes]<vk::PresentModeKHR PM>() -> char {
+				auto pred = [](auto&& it) { return (it == PM) ? true : false; };
+				auto res = std::find_if(presentModes.begin(), presentModes.end(), pred);
+				auto x = (res == presentModes.end()) ? true : false;
+				if (!x) { std::cout << "supported"; } else { std::cout << "unsupported"; }
+				return ' ';
+			};
+
+			std::cout << "Choice Mode: " << std::endl
+				<< "\t1 - eMailbox | " << is_avaible.operator()<vk::PresentModeKHR::eMailbox>() << std::endl
+				<< "\t2 - eFifo | " << is_avaible.operator()<vk::PresentModeKHR::eFifo>() << std::endl
+				<< "\t3 - eFifoRelaxed | " << is_avaible.operator()<vk::PresentModeKHR::eFifoRelaxed>() << std::endl
+				<< "\t4 - eSharedDemandRefresh | " << is_avaible.operator()<vk::PresentModeKHR::eSharedDemandRefresh>() << std::endl
+				<< "\t5 - eSharedContinuousRefresh | " << is_avaible.operator()<vk::PresentModeKHR::eSharedContinuousRefresh>() << std::endl
+				<< "\t6 - eFifoLatestReady | " << is_avaible.operator()<vk::PresentModeKHR::eFifoLatestReady>() << std::endl
+				<< "\t7 - eFifoLatestReadyEXT | " << is_avaible.operator()<vk::PresentModeKHR::eFifoLatestReadyEXT>() << std::endl
+				<< "\t8 - eImmediate | " << is_avaible.operator()<vk::PresentModeKHR::eImmediate>() << std::endl
+				<< ">> ";
+
+			vk::PresentModeKHR pm = vk::PresentModeKHR::eFifo;
+			int mode = 0;
+			std::cin >> mode;
+			switch (mode) {
+				case 1: { pm = vk::PresentModeKHR::eMailbox; break; }
+				case 2: { pm = vk::PresentModeKHR::eFifo; break; }
+				case 3: { pm = vk::PresentModeKHR::eFifoRelaxed; break; }
+				case 4: { pm = vk::PresentModeKHR::eSharedDemandRefresh; break; }
+				case 5: { pm = vk::PresentModeKHR::eSharedContinuousRefresh; break; }
+				case 6: { pm = vk::PresentModeKHR::eFifoLatestReady; break; }
+				case 7: { pm = vk::PresentModeKHR::eFifoLatestReadyEXT; break; }
+				case 8: { pm = vk::PresentModeKHR::eImmediate; break; }
+				default: { pm = vk::PresentModeKHR::eFifo; }
+			}
+			
+			return pm;
+		};
+
+		vk::PresentModeKHR present_mode = choice_present_mode();
+		vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent, present_mode);
 		vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, physical_device, surface_format.format);
 
 		vkCube::vkUBO_T vk_ubo(logical_device, physical_device);
@@ -200,7 +252,7 @@ int main() {
 			return depth_data.first;
 			};
 		
-		constexpr std::size_t MAX_IMAGES = 16;
+		constexpr std::size_t MAX_IMAGES = 32;
 
 		constexpr std::size_t VK_IMAGES_N_ELEMS = MAX_IMAGES;
 		constexpr std::size_t VK_IMAGES_SIZE = VK_IMAGES_N_ELEMS * sizeof(vk::raii::Image);
@@ -346,26 +398,32 @@ int main() {
 				vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, vk_ubo.get_DescriptorSet(), extent);
 			};
 
-		auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent]() {
-			auto newSwapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent, std::move(swapchain));
+		auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent, &present_mode]() {
+			auto newSwapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent, present_mode, std::move(swapchain));
 			swapchain = std::move(newSwapchain);
-			};
-
-		auto recreate_swapchain = [
-			&update_swapchain,
-			&update_swapchain_images,
-			&update_image_views,
-			&update_framebuffes
-		]() {
-			update_swapchain();
-			update_swapchain_images();
-			update_image_views();
-			update_framebuffes();
 			};
 
 		vk::supp::Renderer renderer(logical_device, frames_in_flight, swapchain_ImageViews.size());
 		auto render_frame = [&renderer, &logical_device, &swapchain, &graphics_queue, &present_queue, &command_buffers, &framebuffers, &update_commandbuffer]() -> bool {
 			return renderer.render_frame(logical_device, swapchain, graphics_queue, present_queue, command_buffers, framebuffers, update_commandbuffer);
+		};
+
+		auto update_sync_primitives = [&logical_device, &renderer, &frames_in_flight, &swapchain_ImageViews]() {
+			renderer.update_sync_primitives(logical_device, frames_in_flight, swapchain_ImageViews.size());
+		};
+
+		auto recreate_swapchain = [
+			&update_swapchain,
+			&update_swapchain_images,
+			&update_image_views,
+			&update_framebuffes,
+			&update_sync_primitives
+		]() {
+			update_swapchain();
+			update_swapchain_images();
+			update_image_views();
+			update_framebuffes();
+			update_sync_primitives();
 		};
 		
 		auto counter = [lastTime = std::chrono::steady_clock::now(), frameCount = 0u]() mutable {

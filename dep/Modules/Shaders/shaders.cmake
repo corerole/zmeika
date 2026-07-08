@@ -1,7 +1,5 @@
 set(APP_SHADERS_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
-
 target_sources(
 	${PROJECT_NAME} PUBLIC
 	FILE_SET CXX_MODULES 

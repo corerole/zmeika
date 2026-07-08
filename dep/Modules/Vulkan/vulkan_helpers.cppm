@@ -5,8 +5,8 @@ import std;
 import vulkan;
 
 namespace {
-#if 0
-	static vk::PresentModeKHR create_PresentModeKHR(const vk::raii::PhysicalDevice& PhysDevice, const vk::raii::SurfaceKHR& Surface) {
+#if 1
+	vk::PresentModeKHR create_PresentModeKHR(const vk::raii::PhysicalDevice& PhysDevice, const vk::raii::SurfaceKHR& Surface) {
 		std::vector<vk::PresentModeKHR> presentModes = PhysDevice.getSurfacePresentModesKHR(Surface);
 		unsigned presentModeCount = (unsigned)presentModes.size();
 		if (presentModeCount == 0) { throw std::runtime_error("No presentation modes supported"); }
@@ -211,6 +211,7 @@ namespace vk {
 			const std::pair<unsigned, unsigned>& GaP,
 			const vk::SurfaceFormatKHR& SurfaceFormat,
 			const vk::Extent2D& Extent,
+			vk::PresentModeKHR presentMode_,
 			std::optional<vk::raii::SwapchainKHR> oldSwapchain = std::nullopt
 			)
 		{
@@ -219,14 +220,17 @@ namespace vk {
 
 			unsigned queueFamilyIndices[] = { GraphicsFamily, PresentFamily };
 			vk::SurfaceCapabilitiesKHR capabilities = PhysDevice.getSurfaceCapabilitiesKHR(Surface);
-			vk::PresentModeKHR presentMode = vk::PresentModeKHR::eImmediate;
+			// vk::PresentModeKHR presentMode = create_PresentModeKHR(PhysDevice, Surface);
+
+			vk::PresentModeKHR presentMode = presentMode_;
+				// vk::PresentModeKHR::eImmediate;
 				// vk::PresentModeKHR::eMailbox;
-				// create_PresentModeKHR(PhysDevice, Surface);
 				// vk::PresentModeKHR::eFifoRelaxed;
 				// vk::PresentModeKHR::eFifo;
 				
 			// unsigned ImageCount = capabilities.minImageCount;
-			unsigned ImageCount = 5;
+			// unsigned ImageCount = (2 + (static_cast<unsigned>(std::rand()) % (capabilities.maxImageCount - 2)));
+			unsigned ImageCount = 2;
 			if (capabilities.maxImageCount > 0 && ImageCount > capabilities.maxImageCount) {
 				ImageCount = capabilities.maxImageCount;
 			}
@@ -517,14 +521,28 @@ namespace vk {
 			}
 		}
 #endif
-		struct Renderer {
+
+		template<size_t MAX_IMAGES = 32U>	struct Renderer {
+				static constexpr std::size_t MAX_N_FENCE_BUFFER_BYTES = (MAX_IMAGES * (sizeof(vk::raii::Fence) + alignof(vk::raii::Fence)));
+				static constexpr std::size_t MAX_N_SEMAPHORE_BUFFER_BYTES = (MAX_IMAGES * (sizeof(vk::raii::Semaphore) + alignof(vk::raii::Semaphore)));
+
 			private:
 				unsigned FramesInFlight;
-				unsigned CurrentFrame = 0;
-				std::vector<vk::raii::Fence> InFlightFences;
-				std::vector<vk::raii::Fence> ImagesInFlight;
-				std::vector<vk::raii::Semaphore> ImageAvailableSemaphores;
-				std::vector<vk::raii::Semaphore> RenderFinishedSemaphores;
+				unsigned CurrentFrame;
+
+				alignas(alignof(vk::raii::Fence)) std::array<std::byte, MAX_N_FENCE_BUFFER_BYTES> InFlightFencesBuffer;
+				alignas(alignof(vk::raii::Fence)) std::array<std::byte, MAX_N_FENCE_BUFFER_BYTES> ImagesInFlightBuffer;
+				alignas(alignof(vk::raii::Semaphore)) std::array<std::byte, MAX_N_SEMAPHORE_BUFFER_BYTES> ImageAvailableSemaphoresBuffer;
+				alignas(alignof(vk::raii::Semaphore)) std::array<std::byte, MAX_N_SEMAPHORE_BUFFER_BYTES> RenderFinishedSemaphoresBuffer;
+				std::pmr::monotonic_buffer_resource InFlightFencesResource;
+				std::pmr::monotonic_buffer_resource ImagesInFlightResource;
+				std::pmr::monotonic_buffer_resource ImageAvailableSemaphoresResource;
+				std::pmr::monotonic_buffer_resource RenderFinishedSemaphoresResource;
+
+				std::pmr::vector<vk::raii::Fence> InFlightFences;
+				std::pmr::vector<vk::raii::Fence> ImagesInFlight;
+				std::pmr::vector<vk::raii::Semaphore> ImageAvailableSemaphores;
+				std::pmr::vector<vk::raii::Semaphore> RenderFinishedSemaphores;
 
 				static std::vector<vk::raii::Semaphore> get_Semaphores(const vk::raii::Device& device, unsigned n) {
 					std::vector<vk::raii::Semaphore> semaphores;
@@ -543,15 +561,53 @@ namespace vk {
 					return fences;
 				}
 
+				static void move_elems(ArrayLike auto& src, ArrayLike auto& dst) {
+					dst.clear();
+					dst.reserve(src.size());
+					for (auto& elem : src) {
+						dst.emplace_back(std::move(elem));
+					}
+				}
+
+			public:
+				void update_sync_primitives(const vk::raii::Device& device, unsigned fif, unsigned n_images) {
+					CurrentFrame = 0;
+					FramesInFlight = fif;
+					auto iff = get_Fences(device, fif);
+					move_elems(iff, InFlightFences);
+					auto iif = get_Fences(device, n_images);
+					move_elems(iif, ImagesInFlight);
+					auto ias = get_Semaphores(device, n_images);
+					move_elems(ias, ImageAvailableSemaphores);
+					auto rfs = get_Semaphores(device, n_images);
+					move_elems(rfs, RenderFinishedSemaphores);
+				}
+
 			public:
 				Renderer(const vk::raii::Device& device, unsigned fif, unsigned n_images)
-					: FramesInFlight(fif)
-					, InFlightFences(get_Fences(device, fif))
-					, ImagesInFlight(get_Fences(device, n_images))
-					, ImageAvailableSemaphores(get_Semaphores(device, n_images))
-					, RenderFinishedSemaphores(get_Semaphores(device, n_images))
+					: FramesInFlight(fif) // (fif)
+					, CurrentFrame(0)
+					, InFlightFencesBuffer()
+					, ImagesInFlightBuffer()
+					, ImageAvailableSemaphoresBuffer()
+					, RenderFinishedSemaphoresBuffer()
+					, InFlightFencesResource(InFlightFencesBuffer.data(), InFlightFencesBuffer.size(), nullptr)
+					, ImagesInFlightResource(ImagesInFlightBuffer.data(), ImagesInFlightBuffer.size(), nullptr)
+					, ImageAvailableSemaphoresResource(ImageAvailableSemaphoresBuffer.data(), ImageAvailableSemaphoresBuffer.size(), nullptr)
+					, RenderFinishedSemaphoresResource(RenderFinishedSemaphoresBuffer.data(), RenderFinishedSemaphoresBuffer.size(), nullptr)
+					, InFlightFences(&InFlightFencesResource) // (get_Fences(device, fif))
+					, ImagesInFlight(&ImagesInFlightResource) // (get_Fences(device, n_images))
+					, ImageAvailableSemaphores(&ImageAvailableSemaphoresResource) // (get_Semaphores(device, n_images))
+					, RenderFinishedSemaphores(&RenderFinishedSemaphoresResource) // (get_Semaphores(device, n_images))
 				{
-				
+					auto iff = get_Fences(device, fif);
+					move_elems(iff, InFlightFences);
+					auto iif = get_Fences(device, n_images);
+					move_elems(iif, ImagesInFlight);
+					auto ias = get_Semaphores(device, n_images);
+					move_elems(ias, ImageAvailableSemaphores);
+					auto rfs = get_Semaphores(device, n_images);
+					move_elems(rfs, RenderFinishedSemaphores);
 				}
 
 			public:

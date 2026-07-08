@@ -1,6 +1,6 @@
 set(VULKAN_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
 target_sources(
