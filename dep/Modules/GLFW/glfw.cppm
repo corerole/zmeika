@@ -13,7 +13,7 @@ export namespace glfw {
 	using FrameActionState = glfw_enums::FrameActionState;
 	using GLFWKeyState = glfw_enums::GLFWKeyState;
 	using CursorState = glfw_enums::CursorState;
-	using CursorRawInput = glfw_enums::CursorRawInput;
+	using CursorRawInputState = glfw_enums::CursorRawInputState;
 	using FrameActionState = glfw_enums::FrameActionState;
 	using glfw_enums::scancode_key_state;
 

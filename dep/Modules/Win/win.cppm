@@ -12,7 +12,7 @@ export namespace win {
 		/* Enums */
 		using MonitorDPIType = ::MONITOR_DPI_TYPE;
 	}
-
+	
 	namespace t {
 		/* types */
 		using LPWSTR = ::LPWSTR;
@@ -190,6 +190,7 @@ export namespace win {
 		using ::GetWindowTextA;
 		using ::GetWindowTextLengthA;
 		using ::GetWindowRect;
+		using ::DispatchMessageW;
 		
 		#undef MAKEWORD
 		constexpr std::uint16_t MAKEWORD(std::uint8_t a, std::uint8_t b) noexcept {

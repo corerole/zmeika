@@ -5,24 +5,22 @@ import std;
 import win;
 import win_cpp;
 
+#if 0
 export namespace window_proc {
 	using result_type = std::optional<long long>;
 
 	struct WindowsKeyData {
 		unsigned repeatCount;
 		win_cpp::WindowsScancode scanCode;
-		// bool extended : 1;
-		bool contextCode : 1;
-		bool previousState : 1;
-		bool transitionState : 1;
+		bool contextCode;
+		bool previousState;
+		bool transitionState;
 
 		WindowsKeyData(long long lParam)
 			: repeatCount(static_cast<unsigned>(lParam & 0xFFFF))
-			// , scanCode(static_cast<unsigned>((lParam >> 16) & 0xFF))
 			, scanCode(static_cast<win_cpp::WindowsScancode>(
 					((lParam& (1 << 24)) ? 0xE000 : 0) | ((lParam >> 16) & 0xFF)
 				))
-			// , extended((lParam& (1 << 24)) != 0)
 			, contextCode((lParam& (1 << 29)) != 0)
 			, previousState((lParam& (1 << 30)) != 0)
 			, transitionState((lParam& (1 << 31)) != 0)
@@ -130,7 +128,10 @@ export namespace window_proc {
 	using WM_INITDIALOG_callback_T = std::function<result_type()>;
 	using WM_INITMENU_callback_T = std::function<result_type()>;
 	using WM_INITMENUPOPUP_callback_T = std::function<result_type()>;
-	using WM_INPUT_callback_T = std::function<result_type()>;
+	//using WM_INPUT_callback_T = std::function<result_type()>;
+	using WM_RAW_INPUT_MOUSE_callback_T = std::function<result_type(win_cpp::RawInputType, const win_cpp::RawInputMouseData&)>; // MY
+	using WM_RAW_INPUT_KEYBOARD_callback_T = std::function<result_type(win_cpp::RawInputType, const win_cpp::RawInputKeyboardData&)>; // MY
+	using WM_RAW_INPUT_HID_callback_T = std::function<result_type(win_cpp::RawInputType, const win_cpp::RawInputHIDData&)>; // MY
 	using WM_INPUTLANGCHANGE_callback_T = std::function<result_type()>;
 	using WM_INPUTLANGCHANGEREQUEST_callback_T = std::function<result_type()>;
 	using WM_INPUT_DEVICE_CHANGE_callback_T = std::function<result_type()>;
@@ -395,7 +396,10 @@ export namespace window_proc {
 		WM_INITDIALOG_callback_T WM_INITDIALOG_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
 		WM_INITMENU_callback_T WM_INITMENU_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
 		WM_INITMENUPOPUP_callback_T WM_INITMENUPOPUP_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
-		WM_INPUT_callback_T WM_INPUT_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
+		// WM_INPUT_callback_T WM_INPUT_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
+		WM_RAW_INPUT_MOUSE_callback_T WM_RAW_INPUT_MOUSE_callback = [](win_cpp::RawInputType, const win_cpp::RawInputMouseData&) constexpr noexcept -> result_type { return std::nullopt; };
+		WM_RAW_INPUT_KEYBOARD_callback_T WM_RAW_INPUT_KEYBOARD_callback = [](win_cpp::RawInputType, const win_cpp::RawInputKeyboardData&) constexpr noexcept -> result_type { return std::nullopt; };
+		WM_RAW_INPUT_HID_callback_T WM_RAW_INPUT_HID_callback = [](win_cpp::RawInputType, const win_cpp::RawInputHIDData&) constexpr noexcept -> result_type { return std::nullopt; };
 		WM_INPUTLANGCHANGE_callback_T WM_INPUTLANGCHANGE_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
 		WM_INPUTLANGCHANGEREQUEST_callback_T WM_INPUTLANGCHANGEREQUEST_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
 		WM_INPUT_DEVICE_CHANGE_callback_T WM_INPUT_DEVICE_CHANGE_callback = []() constexpr noexcept -> result_type { return std::nullopt; };
@@ -697,7 +701,44 @@ export namespace window_proc {
 				case win_cpp::WindowMessage::WM_INITDIALOG: {  auto res = std::invoke(WM_INITDIALOG_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				case win_cpp::WindowMessage::WM_INITMENU: {  auto res = std::invoke(WM_INITMENU_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				case win_cpp::WindowMessage::WM_INITMENUPOPUP: {  auto res = std::invoke(WM_INITMENUPOPUP_callback);  if(res.has_value()) { return res.value(); } else { break; } }
-				case win_cpp::WindowMessage::WM_INPUT: {  auto res = std::invoke(WM_INPUT_callback);  if(res.has_value()) { return res.value(); } else { break; } }
+				case win_cpp::WindowMessage::WM_INPUT: {
+					auto rit = static_cast<win_cpp::RawInputType>(wParam & 0xff);
+					auto raw_input_handle = reinterpret_cast<win_cpp::RawInputHandle>(lParam);
+					auto ridt = win_cpp::GetRawInputDeviceType(raw_input_handle);
+
+					switch(ridt) {
+						case win_cpp::RawInputDeviceType::RIM_TYPEMOUSE: {
+							auto data = win_cpp::GetRawInputMouseData(raw_input_handle);
+							auto res = std::invoke(WM_RAW_INPUT_MOUSE_callback, rit, data);
+							if (res.has_value()) {
+								return res.value();
+							} else {
+								break;
+							}
+							break;
+						}
+						case win_cpp::RawInputDeviceType::RIM_TYPEKEYBOARD: { 
+							auto data = win_cpp::GetRawInputKeyboardData(raw_input_handle);
+							auto res = std::invoke(WM_RAW_INPUT_KEYBOARD_callback, rit, data);
+							if(res.has_value()) { 
+								return res.value();
+							} else { 
+								break; 
+							} 
+							break; 
+						}
+						case win_cpp::RawInputDeviceType::RIM_TYPEHID: {
+							auto data = win_cpp::GetRawInputHIDData(raw_input_handle);
+							auto res = std::invoke(WM_RAW_INPUT_HID_callback, rit, data);
+							if(res.has_value()) { 
+								return res.value();
+							} else { 
+								break; 
+							} 
+							break; 
+						}						
+					}
+				}
 				case win_cpp::WindowMessage::WM_INPUTLANGCHANGE: {  auto res = std::invoke(WM_INPUTLANGCHANGE_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				case win_cpp::WindowMessage::WM_INPUTLANGCHANGEREQUEST: {  auto res = std::invoke(WM_INPUTLANGCHANGEREQUEST_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				case win_cpp::WindowMessage::WM_INPUT_DEVICE_CHANGE: {  auto res = std::invoke(WM_INPUT_DEVICE_CHANGE_callback);  if(res.has_value()) { return res.value(); } else { break; } }
@@ -1051,5 +1092,276 @@ export namespace window_proc {
 		} // windowProc
 
 		// using proxy_t = std::function<win::t::LRESULT(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam)>;
+#if 0
+		template<win_cpp::WindowMessage MSG> void SetMessageFunc(auto&& F) {
+			if constexpr (MSG == win_cpp::WindowMessage::WM_UNKNOWN_ONE) { WM_UNKNOWN_ONE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATE) { WM_ACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATEAPP) { WM_ACTIVATEAPP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_AFXFIRST) { WM_AFXFIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_AFXLAST) { WM_AFXLAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_APP) { WM_APP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_APPCOMMAND) { WM_APPCOMMAND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ASKCBFORMATNAME) { WM_ASKCBFORMATNAME_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CANCELJOURNAL) { WM_CANCELJOURNAL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CANCELMODE) { WM_CANCELMODE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CAPTURECHANGED) { WM_CAPTURECHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHANGECBCHAIN) { WM_CHANGECBCHAIN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHANGEUISTATE) { WM_CHANGEUISTATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHAR) { WM_CHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHARTOITEM) { WM_CHARTOITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHILDACTIVATE) { WM_CHILDACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CLEAR) { WM_CLEAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CLIPBOARDUPDATE) { WM_CLIPBOARDUPDATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CLOAKED_STATE_CHANGED) { WM_CLOAKED_STATE_CHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CLOSE) { WM_CLOSE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COMMAND) { WM_COMMAND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COMMNOTIFY) { WM_COMMNOTIFY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COMPACTING) { WM_COMPACTING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COMPAREITEM) { WM_COMPAREITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CONTEXTMENU) { WM_CONTEXTMENU_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COPY) { WM_COPY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COPYDATA) { WM_COPYDATA_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_COPYGLOBALDATA) { WM_COPYGLOBALDATA_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CREATE) { WM_CREATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORBTN) { WM_CTLCOLORBTN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORDLG) { WM_CTLCOLORDLG_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLOREDIT) { WM_CTLCOLOREDIT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORLISTBOX) { WM_CTLCOLORLISTBOX_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORMSGBOX) { WM_CTLCOLORMSGBOX_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORSCROLLBAR) { WM_CTLCOLORSCROLLBAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CTLCOLORSTATIC) { WM_CTLCOLORSTATIC_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CUT) { WM_CUT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DEADCHAR) { WM_DEADCHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DELETEITEM) { WM_DELETEITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DESTROY) { WM_DESTROY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DESTROYCLIPBOARD) { WM_DESTROYCLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DEVICECHANGE) { WM_DEVICECHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DEVMODECHANGE) { WM_DEVMODECHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DISPLAYCHANGE) { WM_DISPLAYCHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DPICHANGED) { WM_DPICHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DPICHANGED_AFTERPARENT) { WM_DPICHANGED_AFTERPARENT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DPICHANGED_BEFOREPARENT) { WM_DPICHANGED_BEFOREPARENT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DRAWCLIPBOARD) { WM_DRAWCLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DRAWITEM) { WM_DRAWITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DROPFILES) { WM_DROPFILES_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMCOLORIZATIONCOLORCHANGED) { WM_DWMCOLORIZATIONCOLORCHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMCOMPOSITIONCHANGED) { WM_DWMCOMPOSITIONCHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMNCRENDERINGCHANGED) { WM_DWMNCRENDERINGCHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMSENDICONICLIVEPREVIEWBITMAP) { WM_DWMSENDICONICLIVEPREVIEWBITMAP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMSENDICONICTHUMBNAIL) { WM_DWMSENDICONICTHUMBNAIL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_DWMWINDOWMAXIMIZEDCHANGE) { WM_DWMWINDOWMAXIMIZEDCHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ENABLE) { WM_ENABLE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ENDSESSION) { WM_ENDSESSION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ENTERIDLE) { WM_ENTERIDLE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ENTERMENULOOP) { WM_ENTERMENULOOP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ENTERSIZEMOVE) { WM_ENTERSIZEMOVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ERASEBKGND) { WM_ERASEBKGND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_EXITMENULOOP) { WM_EXITMENULOOP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_EXITSIZEMOVE) { WM_EXITSIZEMOVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_FONTCHANGE) { WM_FONTCHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GESTURE) { WM_GESTURE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GESTURENOTIFY) { WM_GESTURENOTIFY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETDLGCODE) { WM_GETDLGCODE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETDPISCALEDSIZE) { WM_GETDPISCALEDSIZE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETFONT) { WM_GETFONT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETHOTKEY) { WM_GETHOTKEY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETICON) { WM_GETICON_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETMINMAXINFO) { WM_GETMINMAXINFO_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETOBJECT) { WM_GETOBJECT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETTEXT) { WM_GETTEXT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETTEXTLENGTH) { WM_GETTEXTLENGTH_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_GETTITLEBARINFOEX) { WM_GETTITLEBARINFOEX_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HANDHELDFIRST) { WM_HANDHELDFIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HANDHELDLAST) { WM_HANDHELDLAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HELP) { WM_HELP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HOTKEY) { WM_HOTKEY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HSCROLL) { WM_HSCROLL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_HSCROLLCLIPBOARD) { WM_HSCROLLCLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_ICONERASEBKGND) { WM_ICONERASEBKGND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_CHAR) { WM_IME_CHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_COMPOSITION) { WM_IME_COMPOSITION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_COMPOSITIONFULL) { WM_IME_COMPOSITIONFULL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_CONTROL) { WM_IME_CONTROL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_ENDCOMPOSITION) { WM_IME_ENDCOMPOSITION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_KEYDOWN) { WM_IME_KEYDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_KEYLAST) { WM_IME_KEYLAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_KEYUP) { WM_IME_KEYUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_NOTIFY) { WM_IME_NOTIFY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_REQUEST) { WM_IME_REQUEST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_SELECT) { WM_IME_SELECT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_SETCONTEXT) { WM_IME_SETCONTEXT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_IME_STARTCOMPOSITION) { WM_IME_STARTCOMPOSITION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INITDIALOG) { WM_INITDIALOG_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INITMENU) { WM_INITMENU_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INITMENUPOPUP) { WM_INITMENUPOPUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INPUT) { WM_INPUT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INPUTLANGCHANGE) { WM_INPUTLANGCHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INPUTLANGCHANGEREQUEST) { WM_INPUTLANGCHANGEREQUEST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INPUT_DEVICE_CHANGE) { WM_INPUT_DEVICE_CHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_INTERCEPTED_WINDOW_ACTION) { WM_INTERCEPTED_WINDOW_ACTION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_KEYDOWN) { WM_KEYDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_KEYFIRST) { WM_KEYFIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_KEYLAST) { WM_KEYLAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_KEYUP) { WM_KEYUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_KILLFOCUS) { WM_KILLFOCUS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_LBUTTONDBLCLK) { WM_LBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_LBUTTONDOWN) { WM_LBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_LBUTTONUP) { WM_LBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MBUTTONDBLCLK) { WM_MBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MBUTTONDOWN) { WM_MBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MBUTTONUP) { WM_MBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIACTIVATE) { WM_MDIACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDICASCADE) { WM_MDICASCADE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDICREATE) { WM_MDICREATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIDESTROY) { WM_MDIDESTROY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIGETACTIVE) { WM_MDIGETACTIVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIICONARRANGE) { WM_MDIICONARRANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIMAXIMIZE) { WM_MDIMAXIMIZE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDINEXT) { WM_MDINEXT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIREFRESHMENU) { WM_MDIREFRESHMENU_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDIRESTORE) { WM_MDIRESTORE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDISETMENU) { WM_MDISETMENU_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MDITILE) { WM_MDITILE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MEASUREITEM) { WM_MEASUREITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENUCHAR) { WM_MENUCHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENUCOMMAND) { WM_MENUCOMMAND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENUDRAG) { WM_MENUDRAG_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENUGETOBJECT) { WM_MENUGETOBJECT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENURBUTTONUP) { WM_MENURBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MENUSELECT) { WM_MENUSELECT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEACTIVATE) { WM_MOUSEACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEFIRST) { WM_MOUSEFIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEHOVER) { WM_MOUSEHOVER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEHWHEEL) { WM_MOUSEHWHEEL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSELAST) { WM_MOUSELAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSELEAVE) { WM_MOUSELEAVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEMOVE) { WM_MOUSEMOVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOUSEWHEEL) { WM_MOUSEWHEEL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOVE) { WM_MOVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_MOVING) { WM_MOVING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCACTIVATE) { WM_NCACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCCALCSIZE) { WM_NCCALCSIZE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCCREATE) { WM_NCCREATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCDESTROY) { WM_NCDESTROY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCHITTEST) { WM_NCHITTEST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCLBUTTONDBLCLK) { WM_NCLBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCLBUTTONDOWN) { WM_NCLBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCLBUTTONUP) { WM_NCLBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMBUTTONDBLCLK) { WM_NCMBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMBUTTONDOWN) { WM_NCMBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMBUTTONUP) { WM_NCMBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMOUSEHOVER) { WM_NCMOUSEHOVER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMOUSELEAVE) { WM_NCMOUSELEAVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCMOUSEMOVE) { WM_NCMOUSEMOVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCPAINT) { WM_NCPAINT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCPOINTERDOWN) { WM_NCPOINTERDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCPOINTERUP) { WM_NCPOINTERUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCPOINTERUPDATE) { WM_NCPOINTERUPDATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCRBUTTONDBLCLK) { WM_NCRBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCRBUTTONDOWN) { WM_NCRBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCRBUTTONUP) { WM_NCRBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCXBUTTONDBLCLK) { WM_NCXBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCXBUTTONDOWN) { WM_NCXBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NCXBUTTONUP) { WM_NCXBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NEXTDLGCTL) { WM_NEXTDLGCTL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NEXTMENU) { WM_NEXTMENU_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NOTIFY) { WM_NOTIFY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NOTIFYFORMAT) { WM_NOTIFYFORMAT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_NULL) { WM_NULL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PAINT) { WM_PAINT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PAINTCLIPBOARD) { WM_PAINTCLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PAINTICON) { WM_PAINTICON_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PALETTECHANGED) { WM_PALETTECHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PALETTEISCHANGING) { WM_PALETTEISCHANGING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PARENTNOTIFY) { WM_PARENTNOTIFY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PASTE) { WM_PASTE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PENWINFIRST) { WM_PENWINFIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PENWINLAST) { WM_PENWINLAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERACTIVATE) { WM_POINTERACTIVATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERCAPTURECHANGED) { WM_POINTERCAPTURECHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERDEVICECHANGE) { WM_POINTERDEVICECHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERDEVICEINRANGE) { WM_POINTERDEVICEINRANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERDEVICEOUTOFRANGE) { WM_POINTERDEVICEOUTOFRANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERDOWN) { WM_POINTERDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERENTER) { WM_POINTERENTER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERHWHEEL) { WM_POINTERHWHEEL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERLEAVE) { WM_POINTERLEAVE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERROUTEDAWAY) { WM_POINTERROUTEDAWAY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERROUTEDRELEASED) { WM_POINTERROUTEDRELEASED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERROUTEDTO) { WM_POINTERROUTEDTO_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERUP) { WM_POINTERUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERUPDATE) { WM_POINTERUPDATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POINTERWHEEL) { WM_POINTERWHEEL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POWER) { WM_POWER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_POWERBROADCAST) { WM_POWERBROADCAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PRINT) { WM_PRINT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_PRINTCLIENT) { WM_PRINTCLIENT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUERYDRAGICON) { WM_QUERYDRAGICON_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUERYENDSESSION) { WM_QUERYENDSESSION_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUERYNEWPALETTE) { WM_QUERYNEWPALETTE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUERYOPEN) { WM_QUERYOPEN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUERYUISTATE) { WM_QUERYUISTATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUEUESYNC) { WM_QUEUESYNC_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_QUIT) { WM_QUIT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_RBUTTONDBLCLK) { WM_RBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_RBUTTONDOWN) { WM_RBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_RBUTTONUP) { WM_RBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_RENDERALLFORMATS) { WM_RENDERALLFORMATS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_RENDERFORMAT) { WM_RENDERFORMAT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETCURSOR) { WM_SETCURSOR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETFOCUS) { WM_SETFOCUS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETFONT) { WM_SETFONT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETHOTKEY) { WM_SETHOTKEY_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETICON) { WM_SETICON_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETREDRAW) { WM_SETREDRAW_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETTEXT) { WM_SETTEXT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SHOWWINDOW) { WM_SHOWWINDOW_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SIZE) { WM_SIZE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SIZECLIPBOARD) { WM_SIZECLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SIZING) { WM_SIZING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SPOOLERSTATUS) { WM_SPOOLERSTATUS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_STYLECHANGED) { WM_STYLECHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_STYLECHANGING) { WM_STYLECHANGING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYNCPAINT) { WM_SYNCPAINT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSCHAR) { WM_SYSCHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSCOLORCHANGE) { WM_SYSCOLORCHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSCOMMAND) { WM_SYSCOMMAND_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSDEADCHAR) { WM_SYSDEADCHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSKEYDOWN) { WM_SYSKEYDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SYSKEYUP) { WM_SYSKEYUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TABLET_FIRST) { WM_TABLET_FIRST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TABLET_LAST) { WM_TABLET_LAST_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TCARD) { WM_TCARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_THEMECHANGED) { WM_THEMECHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TIMECHANGE) { WM_TIMECHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TIMER) { WM_TIMER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TOOLTIPDISMISS) { WM_TOOLTIPDISMISS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TOUCH) { WM_TOUCH_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_TOUCHHITTESTING) { WM_TOUCHHITTESTING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_UNDO) { WM_UNDO_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_UNICHAR) { WM_UNICHAR_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_UNINITMENUPOPUP) { WM_UNINITMENUPOPUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_UPDATEUISTATE) { WM_UPDATEUISTATE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_USER) { WM_USER_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_USERCHANGED) { WM_USERCHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_VKEYTOITEM) { WM_VKEYTOITEM_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_VSCROLL) { WM_VSCROLL_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_VSCROLLCLIPBOARD) { WM_VSCROLLCLIPBOARD_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_WINDOWPOSCHANGED) { WM_WINDOWPOSCHANGED_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_WINDOWPOSCHANGING) { WM_WINDOWPOSCHANGING_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_WININICHANGE) { WM_WININICHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_WTSSESSION_CHANGE) { WM_WTSSESSION_CHANGE_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_XBUTTONDBLCLK) { WM_XBUTTONDBLCLK_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_XBUTTONDOWN) { WM_XBUTTONDOWN_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_XBUTTONUP) { WM_XBUTTONUP_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHOOSEFONT_GETLOGFONT) { WM_CHOOSEFONT_GETLOGFONT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHOOSEFONT_SETFLAGS) { WM_CHOOSEFONT_SETFLAGS_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_CHOOSEFONT_SETLOGFONT) { WM_CHOOSEFONT_SETLOGFONT_callback = std::forward<decltype(F)>(F); }
+			else if constexpr (MSG == win_cpp::WindowMessage::WM_SETTINGCHANGE) { WM_SETTINGCHANGE_callback = std::forward<decltype(F)>(F); }
+			else { throw;	}
+		} // SetWindowMessageFunc
+#endif
 	};
 } // ns
+
+#endif

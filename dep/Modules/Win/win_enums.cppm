@@ -1134,14 +1134,25 @@ enum class RawInputDeviceType {
 	RIM_TYPEMAX = 2
 };
 
+enum class RawInputType {
+	RIM_INPUT			= 0,
+	RIM_INPUTSINK = 1
+};
+
 enum class KeyboardInputDataType {
-	RI_KEY_MAKE            = 0,
-	RI_KEY_BREAK           = 1,
-	RI_KEY_E0              = 2,
-	RI_KEY_E1              = 4,
-	RI_KEY_TERMSRV_SET_LED = 8,
+	RI_KEY_MAKE            = 0x00,
+	RI_KEY_BREAK           = 0x01,
+	RI_KEY_E0              = 0x02,
+	RI_KEY_E1              = 0x04,
+	RI_KEY_TERMSRV_SET_LED = 0x08,
 	RI_KEY_TERMSRV_SHADOW  = 0x10
 };
+template<>
+struct flags::FlagTraits<KeyboardInputDataType> {
+	static constexpr bool isBitmask = true;
+	static constexpr AllFlags<KeyboardInputDataType> allFlags{ .m_mask = 0x1F };
+};
+
 
 enum class KeyHighword : unsigned short {
 	KF_EXTENDED      = 0x0100,
@@ -1589,6 +1600,49 @@ enum class HitTest : int {
 	HTHELP             = 21,
 };
 
+enum class MouseIndicator {
+	MOUSE_MOVE_RELATIVE        = 0x00,
+	MOUSE_MOVE_ABSOLUTE        = 0x01,
+	MOUSE_VIRTUAL_DESKTOP			 = 0x02,
+	MOUSE_ATTRIBUTES_CHANGED   = 0x04,
+	MOUSE_MOVE_NOCOALESCE			 = 0x08,
+};
+
+template<>
+struct flags::FlagTraits<MouseIndicator> {
+	static constexpr bool isBitmask = true;
+	static constexpr AllFlags<MouseIndicator> allFlags{ .m_mask = 0x0F };
+};
+
+/*
+ * Define the mouse button state indicators.
+ */
+enum class RawInputMouseButtons {
+	RI_MOUSE_LEFT_BUTTON_DOWN  = 0x0001, // Left Button changed to down.
+	RI_MOUSE_LEFT_BUTTON_UP    = 0x0002,  // Left Button changed to up.
+	RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004,  // Right Button changed to down.
+	RI_MOUSE_RIGHT_BUTTON_UP   = 0x0008,  // Right Button changed to up.
+	RI_MOUSE_MIDDLE_BUTTON_DOWN= 0x0010,  // Middle Button changed to down.
+	RI_MOUSE_MIDDLE_BUTTON_UP  = 0x0020,  // Middle Button changed to up.
+	RI_MOUSE_BUTTON_1_DOWN     = RI_MOUSE_LEFT_BUTTON_DOWN,
+	RI_MOUSE_BUTTON_1_UP       = RI_MOUSE_LEFT_BUTTON_UP,
+	RI_MOUSE_BUTTON_2_DOWN     = RI_MOUSE_RIGHT_BUTTON_DOWN,
+	RI_MOUSE_BUTTON_2_UP       = RI_MOUSE_RIGHT_BUTTON_UP,
+	RI_MOUSE_BUTTON_3_DOWN     = RI_MOUSE_MIDDLE_BUTTON_DOWN,
+	RI_MOUSE_BUTTON_3_UP       = RI_MOUSE_MIDDLE_BUTTON_UP,
+	RI_MOUSE_BUTTON_4_DOWN     = 0x0040,
+	RI_MOUSE_BUTTON_4_UP       = 0x0080,
+	RI_MOUSE_BUTTON_5_DOWN     = 0x0100,
+	RI_MOUSE_BUTTON_5_UP       = 0x0200,
+	RI_MOUSE_WHEEL             = 0x0400,
+	RI_MOUSE_HWHEEL            = 0x0800,
+};
+template<>
+struct flags::FlagTraits<RawInputMouseButtons> {
+	static constexpr bool isBitmask = true;
+	static constexpr AllFlags<RawInputMouseButtons> allFlags{ .m_mask = 0x0FFF };
+};
+
 namespace win {
 	export namespace e {
 		using WindowStyle = flags::Flags<Window_Style>;
@@ -1616,7 +1670,7 @@ namespace win {
 		using MapVirtualKeyType = MapVirtualKeyType;
 		using RawInputDataType = RawInputDataType;
 		using RawInputDeviceType = RawInputDeviceType;
-		using KeyboardInputDataType = KeyboardInputDataType;
+		using KeyboardInputDataTypeFlags = flags::Flags<KeyboardInputDataType>;
 		using KeyHighwordFlags = flags::Flags<KeyHighword>;
 		using DrawTextFormatFlags = flags::Flags<DrawTextFormats>;
 		using Edges = WMSZ;
@@ -1640,5 +1694,8 @@ namespace win {
 		using C_File_Options = C_File_Options;
 		using RawInputDeviceStructType = RawInputDeviceStructType;
 		using HitTest = HitTest;
+		using RawInputType = RawInputType;
+		using MouseIndicatorFlags = flags::Flags<MouseIndicator>;
+		using RawInputMouseButtonsFlags = flags::Flags<RawInputMouseButtons>;
 	}
 }

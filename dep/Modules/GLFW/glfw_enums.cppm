@@ -36,7 +36,7 @@ enum class CursorState : unsigned {
 	captured	= 0x00034004
 };
 
-enum class CursorRawInput : bool {
+enum class CursorRawInputState : bool {
 	disabled = false,
 	enabled = true
 };
@@ -1080,7 +1080,7 @@ export namespace glfw_enums {
 		using Orientation = Orientation;
 		using FrameActionState = FrameActionState;
 		using CursorState = CursorState;
-		using CursorRawInput = CursorRawInput;
+		using CursorRawInputState = CursorRawInputState;
 		using AspectRaitoFormatsMapType = AspectRaitoFormatsMapType;
 		// using Key = KeyVariants;
 		// using MouseKey = MouseKey;
