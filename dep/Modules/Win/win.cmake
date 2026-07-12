@@ -9,4 +9,5 @@ target_sources(
 		"${WIN_DIR}/win_enums.cppm"
 		"${WIN_DIR}/win_hid_usage.cppm"
 		"${WIN_DIR}/windowProc.cppm"
+		"${WIN_DIR}/AtomicFlagInit.cppm"
 )

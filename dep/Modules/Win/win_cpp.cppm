@@ -350,7 +350,20 @@ export namespace win_cpp {
 	using WM_CHOOSEFONT_SETFLAGS_callback_T = std::function<win_cpp::window_proc_callback_result_type()>;
 	using WM_CHOOSEFONT_SETLOGFONT_callback_T = std::function<win_cpp::window_proc_callback_result_type()>;
 
+	struct AtomicFlagMutex {
+		private:
+			std::atomic_flag flag{}; // include <atomic> is it? ATOMIC_FLAG_INIT = {}
+		public:
+			void lock() { while(flag.test_and_set()) { std::this_thread::yield(); } }
+			// bool try_lock() { return !flag.test_and_set(std::memory_order_acquire); }
+			bool try_lock() { return !flag.test_and_set(); }
+			// void unlock() { flag.clear(std::memory_order_release); }
+			void unlock() { flag.clear(); }
+	};
+
 	struct CallbackHolder {
+	private:
+		mutable AtomicFlagMutex mutex;
 		WM_UNKNOWN_ONE_callback_T WM_UNKNOWN_ONE_callback = []() constexpr noexcept -> win_cpp::window_proc_callback_result_type { return std::nullopt; };
 		WM_ACTIVATE_callback_T WM_ACTIVATE_callback = []() constexpr noexcept -> win_cpp::window_proc_callback_result_type { return std::nullopt; };
 		WM_ACTIVATEAPP_callback_T WM_ACTIVATEAPP_callback = []() constexpr noexcept -> win_cpp::window_proc_callback_result_type { return std::nullopt; };
@@ -618,9 +631,11 @@ export namespace win_cpp {
 		WM_CHOOSEFONT_SETFLAGS_callback_T WM_CHOOSEFONT_SETFLAGS_callback = []() constexpr noexcept -> win_cpp::window_proc_callback_result_type { return std::nullopt; };
 		WM_CHOOSEFONT_SETLOGFONT_callback_T WM_CHOOSEFONT_SETLOGFONT_callback = []() constexpr noexcept -> win_cpp::window_proc_callback_result_type { return std::nullopt; };
 
+	public:
 		win::t::LRESULT windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam);
 #if 1
 		template<win_cpp::WindowMessage MSG> void SetMessageFunc(auto&& F) {
+			// std::lock_guard<AtomicFlagMutex> lk(mutex);
 			if constexpr (MSG == win_cpp::WindowMessage::WM_UNKNOWN_ONE) { WM_UNKNOWN_ONE_callback = std::forward<decltype(F)>(F); return; }
 			if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATE) { WM_ACTIVATE_callback = std::forward<decltype(F)>(F); return; }
 			if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATEAPP) { WM_ACTIVATEAPP_callback = std::forward<decltype(F)>(F); return; }
@@ -972,34 +987,20 @@ export namespace win_cpp {
 			std::string get_c() const { return win_cpp::WideCharToMultiByte(_title); }
 	};
 
-	struct DefaultInstance {};
-
 	struct Instance {
-	public:
-		using type = win::t::HINSTANCE;
+		public:
+			using type = win::t::HINSTANCE;
 
-	private:
-		type _instance = nullptr;
+		private:
+			type _instance = nullptr;
 
-	public:
-		// explicit operator const type& () const { return _instance; }
-		// explicit operator type& () { return _instance; }
-		explicit operator type() const { return _instance; }
+		public:
+			explicit operator type() const { return _instance; }
 
-
-	public:
-		// Instance() = default;
-		Instance(const Instance&) = default;
-		Instance& operator=(const Instance&) = default;
-		Instance() : _instance(nullptr) {}
-		Instance(const DefaultInstance&) : _instance(win::f::GetModuleHandleW(0)) {}
-		Instance(std::wstring_view module_name) : _instance(win::f::GetModuleHandleW(module_name.data())) {}
-		Instance(Instance&& instance) : _instance(std::exchange(instance._instance, {})) {}
-		Instance& operator=(Instance&& instance) {
-			if (&instance == this) { return *this; }
-			_instance = std::exchange(instance._instance, {});
-			return *this;
-		}
+		public:
+			Instance() : _instance(win::f::GetModuleHandleW(0)) {}
+			Instance(std::wstring_view module_name) : _instance(win::f::GetModuleHandleW(module_name.data())) {}
+			Instance(std::string_view module_name) : _instance(win::f::GetModuleHandleA(module_name.data())) {}
 	};
 
 	struct Bitmap_V5 {
@@ -1205,8 +1206,8 @@ export namespace win_cpp {
 		const IconCreateInfo& info
 	) {
 		auto ii = info.get_as_win();
-		ii.hbmMask = BitmapColorHandle::type(mask);
-		ii.hbmColor = BitmapMaskHandle::type(color);
+		ii.hbmMask = BitmapMaskHandle::type(mask);
+		ii.hbmColor = BitmapColorHandle::type(color);
 		return win::f::CreateIconIndirect(&ii);
 	}
 
@@ -1216,14 +1217,7 @@ export namespace win_cpp {
 		win::e::LR_Flags fuLoad;
 	};
 
-	struct LoadImageStandardInfo : LoadImageInfo {
-		protected:
-			Instance instance = Instance{};
-		public:
-			Instance get_instance() const {
-				return instance;
-			}
-	};
+	struct LoadImageStandardInfo : LoadImageInfo {};
 
 	struct LoadImageFromModuleInfo : LoadImageStandardInfo {
 		Instance instance;
@@ -1273,7 +1267,7 @@ export namespace win_cpp {
 	win::t::HANDLE loadImageW(
 		const LoadImageStandardIconInfo& info
 	) {
-		win::t::HINSTANCE hInst = Instance::type(info.get_instance());
+		win::t::HINSTANCE hInst = nullptr;
 		win::t::LPCWSTR name =
 			reinterpret_cast<win::t::LPCWSTR>(
 				win::f::MAKEINTRESOURCE(
@@ -1299,12 +1293,10 @@ export namespace win_cpp {
 	win::t::HANDLE loadImageW(
 		const LoadImageStandardCursorInfo& info
 	) {
-		win::t::HINSTANCE hInst = Instance::type(info.get_instance());
+		win::t::HINSTANCE hInst = nullptr;
 		win::t::LPCWSTR name =
-			reinterpret_cast<win::t::LPCWSTR>(
 				win::f::MAKEINTRESOURCE(
 					std::to_underlying(info.standard_cursor)
-				)
 			);
 		win::t::UINT type = std::to_underlying(info.get_ImageType());
 		win::t::UINT fuLoad = LR_Flags::MaskType(info.fuLoad);
@@ -1366,14 +1358,8 @@ export namespace win_cpp {
 
 	struct Icon {
 	public:
-		using color_base = BitmapColorHandle;
-		using mask_base = BitmapMaskHandle;
 		using type = win::t::HICON;
 		explicit operator type() const { return icon_handle; }
-
-		// private:
-			// using color_base::color_handle;
-			// using mask_base::mask_handle;
 
 	private:
 		type icon_handle;
@@ -1381,12 +1367,9 @@ export namespace win_cpp {
 	public:
 		Icon() : icon_handle(nullptr) {}
 
-		Icon(const color_base& color, const mask_base& mask, const IconCreateInfo& info)
-			// : color_base(std::forward<std::add_rvalue_reference_t<color_base>>(color))
-			// , mask_base(std::forward<std::add_rvalue_reference_t<mask_base>>(mask))
+		Icon(const BitmapColorHandle& color, const BitmapMaskHandle& mask, const IconCreateInfo& info)
 			: icon_handle(CreateIconIndirect(color, mask, info))
-		{
-		}
+		{}
 
 		Icon(const LoadCursorImageFromModuleInfo& info) : icon_handle(
 			reinterpret_cast<type>(loadImageW(info))
@@ -1403,23 +1386,21 @@ export namespace win_cpp {
 		Icon(const LoadImageStandardCursorInfo& info) : icon_handle(
 			reinterpret_cast<type>(loadImageW(info))
 		) {}
-
-		win::t::HICON get_handle() const { return icon_handle; };
 	};
 
 	struct MainClassCreateInfo {
 		private:
 			win::t::WNDPROC wnd_proc = win_cpp::windowProc;
-		public:
 
-		win::e::WindowClassStyle window_style;
-		StandardCursors cursor_style;
-		std::wstring_view ClassName;
-		LR_Flags lr_flag;
-		void* hbrBackground;
-		Icon cursor;
-		Icon icon;
-		Instance instance;
+		public:
+			win::e::WindowClassStyle window_style;
+			StandardCursors cursor_style;
+			std::wstring_view ClassName;
+			LR_Flags lr_flag;
+			void* hbrBackground;
+			Icon cursor;
+			Icon icon;
+			Instance instance;
 
 		win::t::WNDCLASSEXW get_as_win() const {
 			auto _style = win::e::WindowClassStyle::MaskType(window_style);
@@ -1460,21 +1441,21 @@ export namespace win_cpp {
 	};
 
 	struct WindowCreateInfo {
-	private:
-		void* parent = nullptr;
-		void* menu_handle = nullptr;
-		void* lpParam = nullptr;
+		private:
+			void* parent = nullptr;
+			void* menu_handle = nullptr;
+			void* lpParam = nullptr;
 
-	public:
-		Instance instance;
-		WindowStyle dwStyle;
-		ExtendedWindowStyle dwExStyle;
-		MainClass main_class;// std::wstring_view lpClassName;
-		std::wstring lpWindowName;
-		int X;
-		int Y;
-		int nWidth;
-		int nHeight;
+		public:
+			Instance instance;
+			WindowStyle dwStyle;
+			ExtendedWindowStyle dwExStyle;
+			MainClass main_class;// std::wstring_view lpClassName;
+			std::wstring lpWindowName;
+			int X;
+			int Y;
+			int nWidth;
+			int nHeight;
 	};
 
 	win::t::HWND CreateWindowExW(
@@ -1496,6 +1477,7 @@ export namespace win_cpp {
 		win::t::HWND nWndParent = nullptr; // Info.parent;
 		win::t::HMENU hMenu = nullptr; // Info.menu_handle;
 		win::t::HINSTANCE hInstance = Instance::type(Info.instance);
+		if (!hInstance) { throw; }
 		void* lpParam = nullptr;
 		return win::f::CreateWindowExW(
 			dwExStyle,
@@ -1559,12 +1541,15 @@ export namespace win_cpp {
 		return win::f::DefWindowProcW(hWnd, uMsg, wParam, lParam);
 	};
 
+
+
 	auto thin_window_proc = [](win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) -> win::t::LRESULT {
 		using CBH_T = win_cpp::CallbackHolder;
 		using P_CBH_T = std::add_pointer_t<CBH_T>;
-		auto void_ptr = win::f::GetPropW(hWnd, L"CALLBACKS");
+		auto userdata = std::to_underlying(win::e::WindowFieldsOffset::GWL_USERDATA);
+		auto void_ptr = win::f::GetWindowLongPtrW(hWnd, userdata);
 		if (!void_ptr) { throw; }
-		P_CBH_T pcbh = static_cast<P_CBH_T>(void_ptr);
+		P_CBH_T pcbh = reinterpret_cast<P_CBH_T>(void_ptr);
 		auto& cbh = *pcbh;
 		return std::invoke(&CBH_T::windowProc, cbh, hWnd, uMsg, wParam, lParam);
 	};
@@ -1622,54 +1607,28 @@ export namespace win_cpp {
 		}
 	};
 
-
-	struct PreWindow {
-		private:
-			std::jthread process;
-
-		public:
-			PreWindow(const WindowCreateInfo& info, win::t::HWND& window_handle, std::atomic<bool>& ready) : process(
-				[
-					&info,
-					&window_handle,
-					&ready
-				]() {
-					window_handle = CreateWindowExW(info);
-					ready.store(true);
-					win_cpp::Message msg = {};
-					while (true) {
-						auto wmsg = msg.get_msg();
-						if (wmsg == win_cpp::WindowMessage::WM_NULL) {
-							continue;
-						}
-						if (wmsg == win_cpp::WindowMessage::WM_QUIT) {
-							break;
-						}
-						msg.translate();
-						msg.dispatch();
-					}
-			}) {
-
-			};
-	};
-
-	win::t::HWND create_prewindow(const WindowCreateInfo& info) {
-		win::t::HWND hwnd = nullptr;
-		using uPrewindow = std::unique_ptr<PreWindow>;
-		auto x = new uPrewindow;
-		std::atomic<bool> ready = false;
-		*x = std::make_unique<PreWindow>(info, hwnd, ready);
-		while (!ready.load()) {}
-		win::f::SetPropW(hwnd, L"PREWINDOW", x);
-		return hwnd;
-	};
+	void message_process(const std::stop_token& stoken) {
+		win_cpp::Message msg = {};
+		while (!stoken.stop_requested()) {
+			auto wmsg = msg.peek_msg_without_remove();
+			if (wmsg == win_cpp::WindowMessage::WM_NULL) {
+				continue;
+			}
+			if (wmsg == win_cpp::WindowMessage::WM_QUIT) {
+				break;
+			}
+			msg.translate();
+			msg.dispatch();
+		}
+	}
 
 	struct Window {
 		using type = win::t::HWND;
 		explicit operator type() const { return window_handle; }
 
 	private:
-		win::t::HWND window_handle = nullptr;
+		win::t::HWND window_handle;
+		std::jthread process;
 
 	private:
 		win_cpp::windowproc_f GetWindowProc() {
@@ -1678,80 +1637,70 @@ export namespace win_cpp {
 			return reinterpret_cast<win_cpp::windowproc_f>(y);
 		}
 
-		void SetWindowProc(windowproc_f func) const {
-			auto field_offset = std::to_underlying(win::e::WindowFieldsOffset::GWL_WNDPROC);
-			win::f::SetWindowLongPtrA(window_handle, field_offset, reinterpret_cast<long long>(func));
+		void* GetWindowUserptr() const {
+			auto field_offset = std::to_underlying(win::e::WindowFieldsOffset::GWL_USERDATA);
+			return reinterpret_cast<void*>(win::f::GetWindowLongPtrW(window_handle, field_offset));
 		}
 
+		void SetWindowProc(windowproc_f func) const { // what if is set
+			auto field_offset = std::to_underlying(win::e::WindowFieldsOffset::GWL_WNDPROC);
+			win::f::SetWindowLongPtrW(window_handle, field_offset, reinterpret_cast<win::t::LONG_PTR>(func));
+		}
+
+		void SetWindowUserptr(void* ptr) const { // what if is set
+			auto field_offset = std::to_underlying(win::e::WindowFieldsOffset::GWL_USERDATA);
+			win::f::SetWindowLongPtrW(window_handle, field_offset, reinterpret_cast<win::t::LONG_PTR>(ptr));
+		}
 
 	public:
-		Window() : window_handle(nullptr) {}
-		Window(const WindowCreateInfo& info) : window_handle(create_prewindow(info)) { //(CreateWindowExW(info)) {
-			win::f::SetPropW(window_handle, L"INITAL", this);
-#if 1
-			using CBH_T = win_cpp::CallbackHolder;
-			using P_CBH_T = std::add_pointer_t<CBH_T>;
-			P_CBH_T callbacks_ptr = new CBH_T;
-			// using wndproclmbd_t = decltype(thin_window_proc);
-			// auto wndproclmbd_obj_ptr = new wndproclmbd_t;
-			win::f::SetPropW(window_handle, L"CALLBACKS", callbacks_ptr);
-			// std::cout << "create callback place: | " << (void*)callbacks_ptr << std::endl;
-			// win::f::SetPropW(window_handle, L"CALLBACKS_FUNC", wndproclmbd_obj_ptr);
-			// SetWindowProc(wndproclmbd_obj_ptr->operator());
-
-#endif
-
-			SetWindowProc(thin_window_proc);
+		Window(const WindowCreateInfo& info) : window_handle(0), process() {
+			std::promise<void> pr;
+			auto future = pr.get_future();
+			process = std::jthread([this, info, promise = std::move(pr)](std::stop_token stoken) mutable {
+					window_handle = CreateWindowExW(info);
+					win_cpp::CallbackHolder callbacks;
+					SetWindowUserptr(&callbacks);
+					SetWindowProc(thin_window_proc);
+					promise.set_value();
+					message_process(stoken);
+					SetWindowProc(windowProc);
+					SetWindowUserptr(nullptr);
+				}
+			);
+			future.wait();
 		}
 
+		// Window() : Window(WindowCreateInfo{}) {} // empty instance warning
+
 		~Window() {
-#if 1
-			// auto wndproclmbd_obj_ptr = win::f::GetPropW(window_handle, L"CALLBACKS_FUNC");
-			// delete wndproclmbd_obj_ptr;
-			SetWindowProc(win_cpp::windowProc);
-
-			using CBH_T = win_cpp::CallbackHolder;
-			using P_CBH_T = std::add_pointer_t<CBH_T>;
-			auto void_ptr = win::f::GetPropW(window_handle, L"CALLBACKS");
-			P_CBH_T obj_ptr = static_cast<P_CBH_T>(void_ptr);
-			// std::cout << "delete callback place: | " << (void*)obj_ptr << std::endl;
-			if (obj_ptr) {
-				delete obj_ptr;
+			if (!process.joinable()) {
+				process.request_stop();
 			}
-			
-#endif
-
-#if 1
-			using uPrewindow = std::unique_ptr<PreWindow>;
-			using uPrewindow_ptr = std::add_pointer_t<uPrewindow>;
-			auto void_ptr_2 = win::f::GetPropW(window_handle, L"PREWINDOW");
-			if (void_ptr_2 != nullptr) {
-				uPrewindow_ptr prewnd_ptr = static_cast<uPrewindow_ptr>(void_ptr_2);
-				auto& prewnd = *prewnd_ptr;
-				prewnd.reset();
-				delete prewnd_ptr;
-			}
-#endif
 			if (window_handle) {
 				win::f::DestroyWindow(window_handle);
 			}
 		}
-		Window(const Window& wnd) = delete;
-		Window(Window&& wnd) : window_handle(std::exchange(wnd.window_handle, nullptr)) {}
-		Window& operator=(const Window& wnd) = delete;
-		Window& operator=(Window&& wnd) { window_handle = std::exchange(wnd.window_handle, nullptr); return *this; };
+		Window(const Window&) = delete;
+		Window(Window&& wnd)
+			: window_handle(std::exchange(wnd.window_handle, nullptr))
+			, process(std::exchange(wnd.process, {})) {
+		}
+		Window& operator=(const Window&) = delete;
+		Window& operator=(Window&& wnd) { 
+			if (&wnd == this) { return *this; }
+			window_handle = std::exchange(wnd.window_handle, {});
+			process = std::exchange(wnd.process, {});
+			return *this;
+		};
 
 #if 1
 		template<win_cpp::WindowMessage MSG> void SetWindowMessageCallback(auto&& F) const {
 			using CBH_T = win_cpp::CallbackHolder;
 			using P_CBH_T = std::add_pointer_t<CBH_T>;
-			// auto X = &CBH_T::SetMessageFunc<MSG>;
-			auto void_ptr = win::f::GetPropW(window_handle, L"CALLBACKS");
+			auto void_ptr = GetWindowUserptr();
 			if (!void_ptr) { throw; }
 			P_CBH_T cbh_ptr = static_cast<P_CBH_T>(void_ptr);
 			auto& cbh = *cbh_ptr;
-			// std::cout << "add func to callback place: | " << (void*)cbh_ptr << " | " << (void*)(&cbh) << std::endl;
-			// std::invoke(X, cbh, std::forward<decltype(F)>(F));
 			cbh.SetMessageFunc<MSG>(std::forward<decltype(F)>(F));
 		}
 #endif
@@ -2638,6 +2587,7 @@ export namespace win_cpp {
 	};
 
 		win::t::LRESULT CallbackHolder::windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) {
+			// std::lock_guard<AtomicFlagMutex> lk(mutex);
 			auto window_message = static_cast<win_cpp::WindowMessage>(uMsg);
 			switch (window_message) {
 				case win_cpp::WindowMessage::WM_UNKNOWN_ONE: {  auto res = std::invoke(WM_UNKNOWN_ONE_callback);  if(res.has_value()) { return res.value(); } else { break; } }

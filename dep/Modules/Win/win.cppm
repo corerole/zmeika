@@ -87,6 +87,7 @@ export namespace win {
 		using RAWMOUSE = ::RAWMOUSE;
 		using RAWKEYBOARD = ::RAWKEYBOARD;
 		using RAWHID = ::RAWHID;
+		using LONG_PTR = ::LONG_PTR;
 	}
 	
 	namespace f {
@@ -191,7 +192,10 @@ export namespace win {
 		using ::GetWindowTextLengthA;
 		using ::GetWindowRect;
 		using ::DispatchMessageW;
-		
+		using ::SetWindowLongPtrW;
+		using ::GetModuleHandleA;
+
+
 		#undef MAKEWORD
 		constexpr std::uint16_t MAKEWORD(std::uint8_t a, std::uint8_t b) noexcept {
 			return (static_cast<std::uint16_t>(a) & 0xFFu) | (static_cast<std::uint16_t>(b) << 8u);
@@ -236,11 +240,11 @@ export namespace win {
 		}
 		
 		#undef MAKEINTRESOURCE
-		constexpr win::t::LPSTR MAKEINTRESOURCE(int i) noexcept {
+		constexpr win::t::LPWSTR MAKEINTRESOURCE(int i) noexcept {
 			// ((LPSTR)((ULONG_PTR)((WORD)(i))))
 			auto res0 = static_cast<win::t::WORD>(i);
 			auto res1 = static_cast<win::t::ULONG_PTR>(res0);
-			auto res2 = reinterpret_cast<win::t::LPSTR>(res1);
+			auto res2 = reinterpret_cast<win::t::LPWSTR>(res1);
 			return res2;
 		}
 
