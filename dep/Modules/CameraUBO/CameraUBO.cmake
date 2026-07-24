@@ -1,0 +1,9 @@
+set(VK_UBO_PWD "${CMAKE_CURRENT_LIST_DIR}")
+
+target_sources(
+	${PROJECT_NAME} PUBLIC
+	FILE_SET CXX_MODULES 
+	BASE_DIRS ${VK_UBO_PWD}
+	FILES
+		"${VK_UBO_PWD}/CameraUBO.cppm"
+)

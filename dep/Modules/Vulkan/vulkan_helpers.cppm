@@ -21,6 +21,8 @@ namespace {
 
 namespace vk {
 	export namespace supp {
+		template<typename T> concept ArrayLike = std::true_type::value;
+
 		constexpr unsigned myVK_MAKE_VERSION(unsigned major, unsigned minor, unsigned patch) {
 			return ((major << 22U) | (minor << 12U) | patch);
 		}
@@ -51,6 +53,11 @@ namespace vk {
 			return vk::raii::ShaderModule(device, createInfo);
 		}
 
+		template<typename T> concept vector_like = std::true_type::value;
+		constexpr unsigned vectorsizeof(const vector_like auto& vec) noexcept {
+			using value_type = std::remove_cvref_t<decltype(vec)>::value_type;
+			return vec.size() * sizeof(value_type);
+		}
 
 		std::pair<unsigned, unsigned> get_QueueFamilies(
 			const vk::raii::PhysicalDevice& PhysicalDevice,
@@ -126,8 +133,10 @@ namespace vk {
 				queueCreateInfos.push_back(queueCreateInfo);
 			}
 
-			// note: we are querying no device features
 			vk::PhysicalDeviceFeatures deviceFeatures{};
+#if 1
+			deviceFeatures.samplerAnisotropy = true;
+#endif
 
 			vk::DeviceCreateInfo createInfo{};
 			createInfo.sType = vk::StructureType::eDeviceCreateInfo;
@@ -264,6 +273,108 @@ namespace vk {
 			return vk::raii::SwapchainKHR(Device, createInfo);
 		}
 
+		vk::SamplerCreateInfo get_AnisotropySamplerInfo() {
+			vk::SamplerCreateInfo samplerInfo{};
+			samplerInfo.magFilter = vk::Filter::eLinear;
+			samplerInfo.minFilter = vk::Filter::eLinear;
+			samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+			samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+			samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+			samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+			samplerInfo.anisotropyEnable = true;
+			samplerInfo.maxAnisotropy = 16.0f;
+			samplerInfo.minLod = 0.0f;
+			constexpr float VK_LOD_CLAMP_NONE = 1000.0F;
+			samplerInfo.maxLod = VK_LOD_CLAMP_NONE; 
+			samplerInfo.borderColor = vk::BorderColor::eFloatOpaqueBlack;
+			return samplerInfo;
+		}
+
+		vk::raii::DescriptorPool create_DescPool(const vk::raii::Device& device) {
+			vk::DescriptorPoolSize poolSize(vk::DescriptorType::eCombinedImageSampler, 1);
+			std::array<vk::DescriptorPoolSize, 1> poolSizes = { poolSize };
+			const unsigned maxSets = 1;
+			vk::DescriptorPoolCreateFlags flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+			vk::DescriptorPoolCreateInfo desc_pool_info(flags, maxSets, poolSizes);
+			return vk::raii::DescriptorPool(device, desc_pool_info);
+		}
+
+		vk::raii::DescriptorSetLayout create_DescSetLayout(const vk::raii::Device& device, const std::vector<vk::Sampler>& samplers) {
+			if (samplers.size() == 0) { throw; }
+			vk::DescriptorType desc_type = vk::DescriptorType::eCombinedImageSampler;
+			vk::ShaderStageFlags ssf = vk::ShaderStageFlags::BitsType::eFragment;
+
+			vk::DescriptorSetLayoutBinding dsclb(0, desc_type, ssf, samplers);
+			std::array<const vk::DescriptorSetLayoutBinding, 1> dsclbs = { dsclb };
+
+			vk::DescriptorSetLayoutCreateFlagBits flags = {};
+			void* p_next = nullptr;
+			vk::DescriptorSetLayoutCreateInfo desc_set_layout_info(flags, dsclbs, p_next);
+			return vk::raii::DescriptorSetLayout(device, desc_set_layout_info);
+		}
+
+		std::vector<vk::raii::Sampler> create_Samplers(const vk::raii::Device& logical_device, std::span<const vk::SamplerCreateInfo> SCIs) {
+			std::vector<vk::raii::Sampler> samplers;
+			for (auto&& SCI : SCIs) { samplers.emplace_back(logical_device, SCI); }
+			return samplers;
+		}
+
+		struct Samplers_DescriptorSetHolder {
+			private:
+				std::vector<vk::raii::Sampler> samplers;
+				vk::raii::DescriptorPool desc_pool;
+				vk::raii::DescriptorSetLayout desc_layout;
+				vk::raii::DescriptorSet desc_set;
+
+			private:
+				static std::vector<vk::Sampler> to_vk_samplers(std::span<vk::raii::Sampler> samplers) {
+					std::vector<vk::Sampler> simps;
+					for (auto&& samp : samplers) { simps.push_back(*samp); }
+					return simps;
+				}
+		
+			public:
+				Samplers_DescriptorSetHolder(
+					std::span<const vk::SamplerCreateInfo> samplers_info,
+					const vk::raii::Device& logical_device
+				)
+					: samplers(create_Samplers(logical_device, samplers_info))
+					, desc_pool(create_DescPool(logical_device))
+					, desc_layout(create_DescSetLayout(logical_device, to_vk_samplers(std::span(samplers.data(), samplers.size()))))
+					, desc_set(std::move(logical_device.allocateDescriptorSets(vk::DescriptorSetAllocateInfo(desc_pool, 1u, &(*desc_layout)))[0]))
+				{
+				}
+
+				const auto& get_DescriptorSet() const { return desc_set; }
+				const auto& get_DescriptorSetLayout() const { return desc_layout; }
+
+				void update_ImageViews(
+					const vk::raii::Device& device,
+					const ArrayLike auto& image_views
+				) const {
+#if 0
+					for (auto&& sampler : samplers) {
+						std::vector<vk::WriteDescriptorSet> wds;
+						unsigned i = 0;
+						for (auto&& iv : image_views) {
+							vk::DescriptorImageInfo imageInfo{};
+							imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+							imageInfo.imageView = *iv;
+							imageInfo.sampler = *sampler;
+							std::array<vk::DescriptorImageInfo, 1> dii = { imageInfo };
+
+							unsigned dstBinding = 0;
+							unsigned dstArrayElement = 0;
+							auto descriptorType = vk::DescriptorType::eCombinedImageSampler;
+							vk::WriteDescriptorSet write(desc_set, dstBinding, dstArrayElement, descriptorType, dii, {}, {});
+							wds.push_back(write);
+						}
+						device.updateDescriptorSets(wds, {});
+					}
+#endif
+				}
+		};
+
 		vk::SampleCountFlagBits getMaxUsableSampleCount(const vk::raii::PhysicalDevice& physical_device) {
 			vk::PhysicalDeviceProperties physicalDeviceProperties = physical_device.getProperties();
 			vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
@@ -277,7 +388,6 @@ namespace vk {
 			if (counts & vk::SampleCountFlagBits::e2) { return vk::SampleCountFlagBits::e2; }
 			return vk::SampleCountFlagBits::e1;
 		}
-
 
 		vk::raii::RenderPass get_RenderPass(
 			const vk::raii::Device& Device,
@@ -433,7 +543,6 @@ namespace vk {
 			return bufferMemory;
 		}
 
-		template<typename T> concept ArrayLike = std::true_type::value;
 		void set_ImageViews(
 			const vk::raii::Device& Device,
 			const vk::Format& SwapchainImageFormat,

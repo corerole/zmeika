@@ -11,8 +11,11 @@ export namespace shaders_compiler {
   std::vector<unsigned> compile_shader(std::string_view source, shaderc_shader_kind kind) {
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
-    //options.SetTargetSpirv(shaderc_spirv_version_1_6);
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
+    options.SetTargetSpirv(shaderc_spirv_version_1_6);
+    constexpr int ShaderVersion = 460;
+    constexpr shaderc_profile profile = shaderc_profile_core;
+    options.SetForcedVersionProfile(ShaderVersion, profile);
 
     auto result = compiler.CompileGlslToSpv(source.data(), source.size(), kind, "shader.glsl", options);
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {

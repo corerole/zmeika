@@ -347,7 +347,7 @@ glfw::CursorStateCallbackT dummy_state_callback = [](const glfw::CursorState&) n
 glfw::CursorPositionCallbackT dummy_pos_callback = [](const std::pair<int, int>& pos) noexcept {};
 struct Cursor {
 	private:
-		glfw::CursorState state_ = glfw::CursorState::disabled;
+		glfw::CursorState state_ = glfw::CursorState::normal;
 		glfw::CursorRawInputState raw_input_state = glfw::CursorRawInputState::disabled;
 		glfw::CursorStateCallbackT cursor_state_callback_f = dummy_state_callback;
 		glfw::CursorPositionCallbackT cursor_position_callback_f = dummy_pos_callback;
@@ -1161,8 +1161,8 @@ void setup_callbacks(Config& cfgx, const win_cpp::Window& window) {
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_CAPTURECHANGED>([cfg = rc, wnd = rw, cWM_CAPTURECHANGEDc = cWM_CAPTURECHANGED](bool has_parent_window) { return std::invoke(cWM_CAPTURECHANGEDc, cfg.get(), wnd.get(), has_parent_window); });
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_SETFOCUS>([cfg = rc, wnd = rw, cWM_SETFOCUSc = cWM_SETFOCUS]() { return std::invoke(cWM_SETFOCUSc, cfg.get(), wnd.get()); });
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_KILLFOCUS>([cfg = rc, wnd = rw, cWM_KILLFOCUSc = cWM_KILLFOCUS]() { return std::invoke(cWM_KILLFOCUSc, cfg.get(), wnd.get()); });
-//cbh.WM_CHAR_callback								= [cfg = rc, wnd = rw, cWM_CHARc = cWM_CHAR](wchar_t character, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_CHARc, cfg.get(), wnd.get(), character, data); };
-//cbh.WM_SYSCHAR_callback							= [cfg = rc, wnd = rw, cWM_SYSCHARc = cWM_SYSCHAR](wchar_t character, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_SYSCHARc, cfg.get(), wnd.get(), character, data); };
+	// window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_CHAR>([cfg = rc, wnd = rw, cWM_CHARc = cWM_CHAR](wchar_t character, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_CHARc, cfg.get(), wnd.get(), character, data); });
+	// window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_SYSCHAR>([cfg = rc, wnd = rw, cWM_SYSCHARc = cWM_SYSCHAR](wchar_t character, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_SYSCHARc, cfg.get(), wnd.get(), character, data); });
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_UNICHAR>([cfg = rc, wnd = rw, cWM_UNICHARc = cWM_UNICHAR](unsigned codepoint, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_UNICHARc, cfg.get(), wnd.get(), codepoint, data); });
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_MOUSEMOVE>([cfg = rc, wnd = rw, cWM_MOUSEMOVEc = cWM_MOUSEMOVE](const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) { return std::invoke(cWM_MOUSEMOVEc, cfg.get(), wnd.get(), m_pos, m_botton_down); });
 	window.SetWindowMessageCallback<win_cpp::WindowMessage::WM_SYSKEYDOWN>([cfg = rc, wnd = rw, cWM_SYSKEYDOWNc = cWM_SYSKEYDOWN](win_cpp::VirtualKeysStandardSet vk, const win_cpp::WindowsKeyData& data) { return std::invoke(cWM_SYSKEYDOWNc, cfg.get(), wnd.get(), vk, data); });
@@ -1341,6 +1341,7 @@ namespace win32_window {
 			void show() { window.show(); }
 			void hide() { window.hide(); }
 			void focus() { window.focus(); }
+			void close() { win_cpp::WindowClose(window); }
 
 		public:
 			void set_key_mods_callback(glfw::CharModsCallbackF&& cmc) {

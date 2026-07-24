@@ -310,6 +310,7 @@ export namespace glfw {
 			void show() { window.show(); }
 			void hide() { window.hide(); }
 			void focus() { window.focus(); }
+			void close() { window.close(); }
 
 		public:
 			void set_key_mods_callback(CharModsCallbackF&& cmc) { 

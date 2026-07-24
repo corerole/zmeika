@@ -5,6 +5,15 @@ import std;
 import win;
 import win_enums;
 
+export struct AtomicFlagMutex {
+	private:
+		std::atomic_flag flag{}; // include <atomic> is it? ATOMIC_FLAG_INIT = {}
+	public:
+		void lock() { while (flag.test_and_set(std::memory_order_acquire)) { std::this_thread::yield(); } }
+		bool try_lock() { return !flag.test_and_set(std::memory_order_acquire); }
+		void unlock() { flag.clear(std::memory_order_release); }
+};
+
 export namespace win_cpp {
 	using windowproc_f = win::t::LRESULT(*)(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam);
 
@@ -350,17 +359,6 @@ export namespace win_cpp {
 	using WM_CHOOSEFONT_SETFLAGS_callback_T = std::function<win_cpp::window_proc_callback_result_type()>;
 	using WM_CHOOSEFONT_SETLOGFONT_callback_T = std::function<win_cpp::window_proc_callback_result_type()>;
 
-	struct AtomicFlagMutex {
-		private:
-			std::atomic_flag flag{}; // include <atomic> is it? ATOMIC_FLAG_INIT = {}
-		public:
-			void lock() { while(flag.test_and_set()) { std::this_thread::yield(); } }
-			// bool try_lock() { return !flag.test_and_set(std::memory_order_acquire); }
-			bool try_lock() { return !flag.test_and_set(); }
-			// void unlock() { flag.clear(std::memory_order_release); }
-			void unlock() { flag.clear(); }
-	};
-
 	struct CallbackHolder {
 	private:
 		mutable AtomicFlagMutex mutex;
@@ -635,7 +633,7 @@ export namespace win_cpp {
 		win::t::LRESULT windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam);
 #if 1
 		template<win_cpp::WindowMessage MSG> void SetMessageFunc(auto&& F) {
-			// std::lock_guard<AtomicFlagMutex> lk(mutex);
+			std::lock_guard<AtomicFlagMutex> lk(mutex);
 			if constexpr (MSG == win_cpp::WindowMessage::WM_UNKNOWN_ONE) { WM_UNKNOWN_ONE_callback = std::forward<decltype(F)>(F); return; }
 			if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATE) { WM_ACTIVATE_callback = std::forward<decltype(F)>(F); return; }
 			if constexpr (MSG == win_cpp::WindowMessage::WM_ACTIVATEAPP) { WM_ACTIVATEAPP_callback = std::forward<decltype(F)>(F); return; }
@@ -1541,8 +1539,6 @@ export namespace win_cpp {
 		return win::f::DefWindowProcW(hWnd, uMsg, wParam, lParam);
 	};
 
-
-
 	auto thin_window_proc = [](win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) -> win::t::LRESULT {
 		using CBH_T = win_cpp::CallbackHolder;
 		using P_CBH_T = std::add_pointer_t<CBH_T>;
@@ -1665,19 +1661,18 @@ export namespace win_cpp {
 					message_process(stoken);
 					SetWindowProc(windowProc);
 					SetWindowUserptr(nullptr);
+					auto res = win::f::DestroyWindow(window_handle);
+					if (!res) {
+						throw std::runtime_error(" Can't close window! ");
+					}
 				}
 			);
 			future.wait();
 		}
 
-		// Window() : Window(WindowCreateInfo{}) {} // empty instance warning
-
 		~Window() {
 			if (!process.joinable()) {
 				process.request_stop();
-			}
-			if (window_handle) {
-				win::f::DestroyWindow(window_handle);
 			}
 		}
 		Window(const Window&) = delete;
@@ -1844,6 +1839,11 @@ export namespace win_cpp {
 		}
 #endif
 	};
+
+	void WindowClose(Window& window) { 
+		constexpr auto close = std::to_underlying(win_cpp::WindowMessage::WM_CLOSE);
+		win::f::PostMessageA(win_cpp::Window::type(window), close, 0, 0);
+	}
 
 	void SetPropW(const Window& window, std::wstring_view name, is_pointer auto p) {
 		auto res = win::f::SetPropW(win_cpp::Window::type(window), name.data(), p);
@@ -2587,7 +2587,6 @@ export namespace win_cpp {
 	};
 
 		win::t::LRESULT CallbackHolder::windowProc(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam) {
-			// std::lock_guard<AtomicFlagMutex> lk(mutex);
 			auto window_message = static_cast<win_cpp::WindowMessage>(uMsg);
 			switch (window_message) {
 				case win_cpp::WindowMessage::WM_UNKNOWN_ONE: {  auto res = std::invoke(WM_UNKNOWN_ONE_callback);  if(res.has_value()) { return res.value(); } else { break; } }

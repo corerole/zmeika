@@ -4,60 +4,18 @@ import glfw_win32_window;
 import glfw;
 import vulkan;
 import vulkan_helpers;
+import CameraUBO;
 import vkCube;
+import ground_shader;
 
 using namespace std::chrono_literals;
 
-glfw::CharModsCallbackF x_charmod_default_callback = [](unsigned codepoint, glfw::CharModsFlags charmod) constexpr noexcept {
-#if 0
-	auto& [ch1, ch2] = sp;
-	if (ch2 == 0) {
-		std::wcout << ch1;
-	}	else {
-		std::wcout << ch1 << ch2;
-	}
-#endif
-};
+glfw::CharModsCallbackF x_charmod_default_callback = [](unsigned codepoint, glfw::CharModsFlags charmod) constexpr noexcept {};
+glfw::CharacterCallbackF x_character_default_callback = [](const auto& sp) constexpr noexcept {};
+glfw::KeyCallbackF x_key_default_callback = [](glfw::Key key, unsigned scancode,	glfw::KeyState action, glfw::CharModsFlags mods) noexcept {};
+glfw::CursorPositionCallbackT x_cursor_position_default_callback = [](const std::pair<int, int>& pos) noexcept {};
+glfw::CursorStateCallbackT x_cursor_state_default_callback = [](const glfw::CursorState& state) noexcept {};
 
-glfw::CharacterCallbackF x_character_default_callback = [](const auto& sp) constexpr noexcept {
-#if 0
-	auto& [ch1, ch2] = sp;
-	if (ch2 == 0) {
-		std::wcout << ch1;
-	}	else {
-		std::wcout << ch1 << ch2;
-	}
-#endif
-};
-
-glfw::KeyCallbackF x_key_default_callback = [](
-	glfw::Key key,
-	unsigned scancode, // ?
-	glfw::KeyState action,
-	glfw::CharModsFlags mods
-	) noexcept {
-#if 0
-		std::cout << std::hex << "Key: " << scancode
-			<< " | action: " << std::to_underlying(action)
-			<< " | mods: " << glfw::CharModsFlags::MaskType(mods)
-			<< std::endl;
-#endif
-};
-
-glfw::CursorPositionCallbackT x_cursor_position_default_callback = [](const std::pair<int, int>& pos) noexcept {
-#if 0
-	auto&& [x, y] = pos;
-	std::cout << "cpos | x=" << x << " | y=" << y << " |\n";
-#endif
-};
-
-glfw::CursorStateCallbackT x_cursor_state_default_callback = [](const glfw::CursorState& state) noexcept {
-#if 0
-	std::cout << "cstate: " << std::to_underlying(state) << "\n";
-#endif
-};
-
-/* ------------------  VK_TEST ----------------------- */
 constexpr std::string_view AppName = "AppName";
 constexpr std::string_view VkEngineName = "EngineName";
 
@@ -92,18 +50,6 @@ vk::raii::Instance instance(context, InstanceInfo);
 
 /* ------------------  VK_TEST ----------------------- */
 
-#if 0
-void foo() {
-	const float PITCH_LIMIT = 89.0f;
-	if (mainCamera.pitch > PITCH_LIMIT) {
-		mainCamera.pitch = PITCH_LIMIT;
-	}
-	if (mainCamera.pitch < -PITCH_LIMIT) {
-		mainCamera.pitch = -PITCH_LIMIT;
-	}
-}
-#endif
-
 int main() {
 	glfw::WindowCreateInfo info = {};
 	info.title = glfw::Title(AppName);
@@ -122,8 +68,8 @@ int main() {
 	auto close_callback = [r_ready = std::ref(ready), r_called = std::ref(called)]() {
 		auto& ready = r_ready.get();
 		auto& called = r_called.get();
-		called.store(true, std::memory_order_release);
-		while (!ready.load(std::memory_order_acquire)) {
+		called.store(true, std::memory_order_relaxed);
+		while (!ready.load(std::memory_order_relaxed)) {
 			std::this_thread::yield();
 		}
 	};
@@ -217,7 +163,7 @@ int main() {
 				case 6: { pm = vk::PresentModeKHR::eFifoLatestReady; break; }
 				case 7: { pm = vk::PresentModeKHR::eFifoLatestReadyEXT; break; }
 				case 8: { pm = vk::PresentModeKHR::eImmediate; break; }
-				default: { pm = vk::PresentModeKHR::eFifo; }
+				default: { pm = vk::PresentModeKHR::eImmediate; }
 			}
 			
 			return pm;
@@ -227,14 +173,20 @@ int main() {
 		vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(logical_device, physical_device, surface, GaPq, surface_format.format, extent, present_mode);
 		vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, physical_device, surface_format.format);
 
-		vkCube::vkUBO_T vk_ubo(logical_device, physical_device);
-		vkCube::vkCubeT vkCube_shader(logical_device, vk_ubo.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
+		auto AnisotropySamplerInfo = vk::supp::get_AnisotropySamplerInfo();
+		std::vector<vk::SamplerCreateInfo> si = { AnisotropySamplerInfo };
+		vk::supp::Samplers_DescriptorSetHolder sdsh(si, logical_device);
+
+		CameraUBO::vkUBO_T vk_ubo(extent, logical_device, physical_device);
+		vkCube::vkCubeT vkCube_shader(logical_device, vk_ubo.get_DescriptorSetLayout(), sdsh.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
+		ground_shader::GroundShader gs(logical_device, vk_ubo.get_DescriptorSetLayout(), sdsh.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
+
 
 		auto create_depth_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent]() {
 			auto depth_resource = vkCube::createDepthResources(logical_device, physical_device, extent);
 			vk::raii::ImageView DepthImageView = vkCube::createDepthImageView(logical_device, depth_resource.first);
 			return std::pair(std::move(DepthImageView), std::move(depth_resource));
-			};
+		};
 
 		auto create_color_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent, format = surface_format.format]() {
 			auto color_resource = vkCube::createColorResources(logical_device, physical_device, extent, format);
@@ -277,14 +229,15 @@ int main() {
 		std::pmr::monotonic_buffer_resource VK_IMAGE_VIEWS_RESOURCE(VK_IMAGE_VIEWS_BUFFER.data(), VK_IMAGE_VIEWS_BUFFER.size(), nullptr);
 		std::pmr::vector<vk::raii::ImageView> swapchain_ImageViews(&VK_IMAGE_VIEWS_RESOURCE);
 		swapchain_ImageViews.reserve(VK_IMAGE_VIEWS_N_ELEMS);
-		auto update_image_views = [&logical_device, &surface_format, &swapchain_images, &swapchain_ImageViews]() {
+		auto update_image_views = [&logical_device, &surface_format, &swapchain_images, &swapchain_ImageViews, &sdsh]() {
 			vk::supp::set_ImageViews(
 				logical_device,
 				surface_format.format,
 				swapchain_images,
 				swapchain_ImageViews
 			);
-			};
+			sdsh.update_ImageViews(logical_device, swapchain_ImageViews);
+		};
 		update_image_views();
 
 		constexpr std::size_t VK_FRAMEBUFFERS_N_ELEMS = MAX_IMAGES;
@@ -318,9 +271,8 @@ int main() {
 			};
 		alloc_command_buffers();
 
-
 		std::pair<float, float> xz;
-		auto key_callback = [xzr = std::ref(xz)](glfw::Key key, unsigned scancode, glfw::KeyState key_state, glfw::CharModsFlags mods) {
+		auto key_callback = [xzr = std::ref(xz), wnd = std::ref(window)](glfw::Key key, unsigned scancode, glfw::KeyState key_state, glfw::CharModsFlags mods) {
 			auto& [x, z] = xzr.get();
 			if (key_state == glfw::KeyState::press) {
 				switch (key) {
@@ -336,6 +288,7 @@ int main() {
 					case glfw::Key::vA: { x += 1.0f; break; };
 					case glfw::Key::vS: { z += 1.0f; break; };
 					case glfw::Key::vD: { x -= 1.0f; break; };
+					case glfw::Key::vEscape: { wnd.get().close(); break; }; // remove
 				}
 			}
 		};
@@ -386,16 +339,46 @@ int main() {
 
 
 		using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
-		update_f update_commandbuffer = [&renderpass, &vk_ubo, &extent, &vkCube_shader, &update_mouse_data, &xz, &update_position](
+		update_f update_commandbuffer = [&renderpass, &vk_ubo, &extent, &vkCube_shader, &update_mouse_data, &xz, &update_position, &gs, &sdsh](
 			const vk::raii::CommandBuffer& command_buffer,
 			const vk::raii::Framebuffer& framebuffer
 			) {
 				vk_ubo.update_extent(extent);
 				vk_ubo.update_angles_by_delta(update_mouse_data());
 				auto pos = update_position(xz);
-				vk_ubo.update_position_by_delta(pos[0], pos[1], pos[2]);
-				vk_ubo.update_device_buffer();
-				vkCube_shader.setup_command_buffers(command_buffer, framebuffer, renderpass, vk_ubo.get_DescriptorSet(), extent);
+				// vk_ubo.update_position_by_delta(pos[0], pos[1], pos[2]);
+				vk_ubo.update_device_buffer(pos[0], pos[1], pos[2]);
+
+				vk::Viewport viewport = {};
+				viewport.minDepth = 0.0f;
+				viewport.maxDepth = 1.0f;
+				viewport.x = 0;
+				viewport.y = 0;
+				viewport.height = extent.height;
+				viewport.width = extent.width;
+
+				vk::Rect2D rect = {};
+				rect.offset.x = 0;
+				rect.offset.y = 0;
+				rect.extent = extent;
+
+				vk::CommandBufferBeginInfo cb_begin_info{};
+				command_buffer.begin(cb_begin_info);
+
+				std::array<vk::ClearValue, 2> clear_values{};
+				clear_values[0] = vk::ClearColorValue{ 0.0f, 0.0f, 0.0f, 1.0f };
+				clear_values[1] = vk::ClearDepthStencilValue{ 1.0f, 0 };
+				vk::RenderPassBeginInfo rp_begin_info{ *renderpass, *framebuffer, {{0,0}, extent}, clear_values };
+				command_buffer.beginRenderPass(rp_begin_info, vk::SubpassContents::eInline);
+
+				command_buffer.setViewport(0, viewport);
+				command_buffer.setScissor(0, rect);
+
+				gs.setup_command_buffers(command_buffer, vk_ubo.get_DescriptorSet(), sdsh.get_DescriptorSet());
+				vkCube_shader.setup_command_buffers(command_buffer, vk_ubo.get_DescriptorSet(), sdsh.get_DescriptorSet());
+
+				command_buffer.endRenderPass();
+				command_buffer.end();
 			};
 
 		auto update_swapchain = [&swapchain, &logical_device, &physical_device, &surface, &GaPq, &surface_format, &extent, &present_mode]() {
@@ -439,7 +422,7 @@ int main() {
 			}
 		};
 
-		while (!called.load(std::memory_order_acquire)) {
+		while (!called.load(std::memory_order_relaxed)) {
 			auto res = render_frame();
 			if (!res) {
 				logical_device.waitIdle();
@@ -454,5 +437,5 @@ int main() {
 		logical_device.waitIdle();
 		// surface destroyed
 	}
-	ready.store(true, std::memory_order_release);
+	ready.store(true, std::memory_order_relaxed);
 }

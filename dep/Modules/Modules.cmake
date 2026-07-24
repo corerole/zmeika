@@ -1,4 +1,5 @@
 set(PWD "${CMAKE_CURRENT_LIST_DIR}")
+
 include("${PWD}/Flags/Flags.cmake")
 include("${PWD}/GLFW/glfw.cmake")
 include("${PWD}/std/std.cmake")
@@ -7,3 +8,5 @@ include("${PWD}/Win/win.cmake")
 include("${PWD}/Shaders/shaders.cmake")
 include("${PWD}/vkCube/vkCube.cmake")
 include("${PWD}/GLM/glm.cmake")
+include("${PWD}/CameraUBO/CameraUBO.cmake")
+include("${PWD}/ground_shader/ground_shader.cmake")
