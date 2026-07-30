@@ -55,7 +55,7 @@ namespace {
 
 			const float grid_step = 1.0;
 			const float line_width = 0.01;
-			const vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+			const vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
 			const vec4 line_color = vec4(0.5, 0.07, 0.77, 0.66);
 
 			void main() {
@@ -80,71 +80,6 @@ namespace {
 		)"
 	);
 
-#if 0
-	template<unsigned N>
-	constexpr auto get_floor() noexcept {
-		constexpr unsigned vertsPerTile = 4;
-		constexpr unsigned indicesPerTile = 6;
-		constexpr unsigned totalTiles = N * N;
-		constexpr unsigned totalVerts = totalTiles * vertsPerTile;
-		constexpr unsigned totalIndices = totalTiles * indicesPerTile;
-
-		std::array<float, totalVerts * 3> vertices{};
-		std::array<unsigned, totalIndices> indices{};
-
-		unsigned vertexOffset = 0;
-		unsigned indexOffset = 0;
-
-		for (unsigned j = 0; j < N; ++j) {
-			for (unsigned i = 0; i < N; ++i) {
-				float x0 = -static_cast<float>(N) + i * 2.0f;
-				float x1 = x0 + 2.0f;
-				float y0 = -static_cast<float>(N) + j * 2.0f;
-				float y1 = y0 + 2.0f;
-
-				vertices[vertexOffset * 3 + 0] = x0;
-				// vertices[vertexOffset * 3 + 1] = y0;
-				vertices[vertexOffset * 3 + 1] = 0.0f;
-				// vertices[vertexOffset * 3 + 2] = 0.0f;
-				vertices[vertexOffset * 3 + 2] = y0;
-
-				vertices[(vertexOffset + 1) * 3 + 0] = x1;
-				// vertices[(vertexOffset + 1) * 3 + 1] = y0;
-				vertices[(vertexOffset + 1) * 3 + 1] = 0.0f;
-				// vertices[(vertexOffset + 1) * 3 + 2] = 0.0f;
-				vertices[(vertexOffset + 1) * 3 + 2] = y0;
-
-				vertices[(vertexOffset + 2) * 3 + 0] = x1;
-				// vertices[(vertexOffset + 2) * 3 + 1] = y1;
-				vertices[(vertexOffset + 2) * 3 + 1] = 0.0f;
-				//vertices[(vertexOffset + 2) * 3 + 2] = 0.0f;
-				vertices[(vertexOffset + 2) * 3 + 2] = y1;
-
-				vertices[(vertexOffset + 3) * 3 + 0] = x0;
-				// vertices[(vertexOffset + 3) * 3 + 1] = y1;
-				vertices[(vertexOffset + 3) * 3 + 1] = 0.0f;
-				// vertices[(vertexOffset + 3) * 3 + 2] = 0.0f;
-				vertices[(vertexOffset + 3) * 3 + 2] = y1;
-
-				indices[indexOffset + 0] = vertexOffset + 0;
-				indices[indexOffset + 1] = vertexOffset + 1;
-				indices[indexOffset + 2] = vertexOffset + 2;
-				indices[indexOffset + 3] = vertexOffset + 0;
-				indices[indexOffset + 4] = vertexOffset + 2;
-				indices[indexOffset + 5] = vertexOffset + 3;
-
-				vertexOffset += 4;
-				indexOffset += 6;
-			}
-		}
-
-		return std::pair{ std::move(vertices), std::move(indices) };
-	}
-
-	const auto [floorVertices, floorIndices] = get_floor<100u>();
-#endif	 
-
-#if 1
 	constexpr float distance = 500.0f;
 	constexpr std::array<float, 12> floorVertices = {
 		-distance, 0.0f, -distance,
@@ -152,24 +87,20 @@ namespace {
 		 distance, 0.0f,  distance,
 		-distance, 0.0f,  distance
 	};
-#endif
 
-#if 1
 	constexpr std::array<unsigned short, 6> floorIndices = {
 		0, 1, 2,
 		0, 2, 3
 	};
-#endif
 
 	vk::raii::PipelineLayout get_PipelineLayout_ground_shader(
 		const vk::raii::Device& Device,
-		const vk::raii::DescriptorSetLayout& camera_dcs_layout,
-		const vk::raii::DescriptorSetLayout& samplers_dcs_layout
+		const vk::raii::DescriptorSetLayout& camera_dcs_layout
 	) {
 		vk::PipelineLayoutCreateFlagBits flags{};
-		std::array<vk::DescriptorSetLayout, 2> dsl = { *camera_dcs_layout, *samplers_dcs_layout };
+		std::array<vk::DescriptorSetLayout, 1> dsl = { camera_dcs_layout };
 		vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo(flags, dsl, {}, nullptr);
-		return vk::raii::PipelineLayout(Device, pipelineLayoutCreateInfo);;
+		return vk::raii::PipelineLayout(Device, pipelineLayoutCreateInfo);
 	}
 
 	vk::raii::PipelineCache get_PipelineCache_ground_shader(const vk::raii::Device& Device) {
@@ -265,20 +196,20 @@ namespace {
 		rasterizer.rasterizerDiscardEnable = 0;
 		rasterizer.polygonMode = vk::PolygonMode::eFill; // vk::PolygonMode::eLine;
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = vk::CullModeFlagBits::eBack; // vk::CullModeFlagBits::eNone;
+		rasterizer.cullMode = vk::CullModeFlagBits::eNone; // vk::CullModeFlagBits::eBack; // 
 		rasterizer.frontFace = vk::FrontFace::eClockwise; // vk::FrontFace::eCounterClockwise;
 		rasterizer.depthBiasEnable = 0;
 		rasterizer.depthBiasConstantFactor = 0.0f;
 		rasterizer.depthBiasClamp = 0.0f;
 		rasterizer.depthBiasSlopeFactor = 0.0f;
 
-		vk::SampleMask sampleMask = std::numeric_limits<unsigned>::max(); // uint32_t
+		vk::SampleMask sampleMask = std::numeric_limits<unsigned>::max();
 
 		vk::PipelineMultisampleStateCreateInfo multisampling{};
 		multisampling.sType = vk::StructureType::ePipelineMultisampleStateCreateInfo;
 		multisampling.flags = vk::PipelineMultisampleStateCreateFlags();
 		multisampling.rasterizationSamples = vk::supp::getMaxUsableSampleCount(physical_device);
-		multisampling.sampleShadingEnable = 0u; // def. false
+		multisampling.sampleShadingEnable = 0u;
 		multisampling.minSampleShading = 1.0f;
 		multisampling.pSampleMask = &sampleMask;
 		multisampling.alphaToCoverageEnable = 0;
@@ -313,11 +244,11 @@ namespace {
 			| vk::ColorComponentFlagBits::eB
 			| vk::ColorComponentFlagBits::eA;
 		// vk::ColorComponentFlagBits::eA | vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB;
-		colorBlendAttachment.blendEnable = 0;
-		colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eZero;
-		colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eZero;
+		colorBlendAttachment.blendEnable = 1;
+		colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;// vk::BlendFactor::eZero;
+		colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 		colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
-		colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eZero;
+		colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
 		colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
 		colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 
@@ -585,14 +516,13 @@ export namespace ground_shader {
 			GroundShader(
 				const vk::raii::Device& logical_device,
 				const vk::raii::DescriptorSetLayout& camera_dcs_layout,
-				const vk::raii::DescriptorSetLayout& samplers_dcs_layout,
 				const vk::raii::PhysicalDevice& physical_device,
 				const vk::raii::RenderPass& renderpass,
 				const vk::Extent2D& extent,
 				const vk::raii::Queue& graphicsQueue,
 				const vk::raii::CommandPool& commandPool
 			)
-				: pipeline_layout(get_PipelineLayout_ground_shader(logical_device, camera_dcs_layout, samplers_dcs_layout))
+				: pipeline_layout(get_PipelineLayout_ground_shader(logical_device, camera_dcs_layout))
 				, pipeline(
 						get_Pipeline_ground_shader(
 							logical_device,
@@ -609,17 +539,15 @@ export namespace ground_shader {
 				, indices_buffer_and_mem(get_index_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 			{}
 
-
 		public:
 			void setup_command_buffers(
 				const vk::raii::CommandBuffer& commandBuffer,
-				const vk::raii::DescriptorSet& desc_set_camera,
-				const vk::raii::DescriptorSet& desc_set_samplers
+				const vk::raii::DescriptorSet& desc_set_camera
 			) {
 				commandBuffer.bindVertexBuffers(0, { *vertex_buffer_and_mem.first }, { 0 });
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
-				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera, desc_set_samplers }, {});
+				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera }, {});
 				commandBuffer.drawIndexed(floorIndices.size(), 1, 0, 0, 0);
 			}
 	};

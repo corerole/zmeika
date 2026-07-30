@@ -1,0 +1,8 @@
+set(STB_IMAGE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+target_sources(
+	${PROJECT_NAME} PUBLIC
+	FILE_SET CXX_MODULES 
+	BASE_DIRS ${STB_IMAGE_DIR}
+	FILES
+		"${STB_IMAGE_DIR}/stb_image.cppm"
+)

@@ -14,11 +14,10 @@ auto vert_v = shaders_compiler::compile_shader(vkCube::shaders_sources::vert, sh
 
 vk::raii::PipelineLayout get_PipelineLayout_vkCube(
 	const vk::raii::Device& Device, 
-	const vk::raii::DescriptorSetLayout& camera_descLayout,
-	const vk::raii::DescriptorSetLayout& samples_descLayout
+	const vk::raii::DescriptorSetLayout& camera_descLayout
 ) {
 	vk::PipelineLayoutCreateFlagBits flags{};
-	std::array<vk::DescriptorSetLayout, 2> desc_lay = { *camera_descLayout, samples_descLayout };
+	std::array<vk::DescriptorSetLayout, 1> desc_lay = { camera_descLayout };
 	vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo(flags, desc_lay, {}, nullptr);
 	return vk::raii::PipelineLayout(Device, pipelineLayoutCreateInfo);
 }
@@ -294,11 +293,11 @@ vk::raii::Pipeline get_Pipeline_vkCube(
 		| vk::ColorComponentFlagBits::eB
 		| vk::ColorComponentFlagBits::eA;
 	// vk::ColorComponentFlagBits::eA | vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB;
-	colorBlendAttachment.blendEnable = 0;
-	colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eZero;
-	colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eZero;
+	colorBlendAttachment.blendEnable = 1;
+	colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;// vk::BlendFactor::eZero;
+	colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 	colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
-	colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eZero;
+	colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
 	colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
 	colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 
@@ -571,14 +570,13 @@ export namespace vkCube {
 			vkCubeT(
 				const vk::raii::Device& logical_device,
 				const vk::raii::DescriptorSetLayout& camera_desc_layout,
-				const vk::raii::DescriptorSetLayout& samplers_desc_layout,
 				const vk::raii::PhysicalDevice& physical_device,
 				const vk::raii::RenderPass& renderpass,
 				const vk::Extent2D& extent,
 				const vk::raii::Queue& graphicsQueue,
 				const vk::raii::CommandPool& commandPool
 			)
-				: pipeline_layout(get_PipelineLayout_vkCube(logical_device, camera_desc_layout, samplers_desc_layout))
+				: pipeline_layout(get_PipelineLayout_vkCube(logical_device, camera_desc_layout))
 				, pipeline(
 						get_Pipeline_vkCube(
 							logical_device,
@@ -599,13 +597,12 @@ export namespace vkCube {
 		public:
 			void setup_command_buffers(
 				const vk::raii::CommandBuffer& commandBuffer,
-				const vk::raii::DescriptorSet& desc_set_camera,
-				const vk::raii::DescriptorSet& desc_set_samplers
+				const vk::raii::DescriptorSet& desc_set_camera
 			) {
 				commandBuffer.bindVertexBuffers(0, { *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first, *vertex_buffer_and_mem.first }, offsets);
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
-				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera, desc_set_samplers }, {});
+				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera }, {});
 				commandBuffer.drawIndexed(vkCube::shaders_data::vIndices.size(), 1, 0, 0, 0);
 			}
 	};

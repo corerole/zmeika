@@ -1,0 +1,9 @@
+set(SKYBOX_SHADER_DIR "${CMAKE_CURRENT_LIST_DIR}")
+target_sources(
+	${PROJECT_NAME} PUBLIC
+	FILE_SET CXX_MODULES 
+	BASE_DIRS ${SKYBOX_SHADER_DIR}
+	FILES
+		"${SKYBOX_SHADER_DIR}/skybox_shader.cppm"
+		"${SKYBOX_SHADER_DIR}/CubeMapData.cppm"
+)

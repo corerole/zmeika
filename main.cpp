@@ -7,6 +7,7 @@ import vulkan_helpers;
 import CameraUBO;
 import vkCube;
 import ground_shader;
+import skybox_shader;
 
 using namespace std::chrono_literals;
 
@@ -30,7 +31,7 @@ vk::ApplicationInfo AppInfo(
 vk::InstanceCreateFlags instance_create_flags;
 
 const std::vector<const char*> EnabledLayers = {
-	// "VK_LAYER_KHRONOS_validation"
+	"VK_LAYER_KHRONOS_validation"
 };
 
 const std::vector<const char*> EnabledExtensions = {
@@ -177,19 +178,19 @@ int main() {
 		std::vector<vk::SamplerCreateInfo> si = { AnisotropySamplerInfo };
 		vk::supp::Samplers_DescriptorSetHolder sdsh(si, logical_device);
 
-		CameraUBO::vkUBO_T vk_ubo(extent, logical_device, physical_device);
-		vkCube::vkCubeT vkCube_shader(logical_device, vk_ubo.get_DescriptorSetLayout(), sdsh.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
-		ground_shader::GroundShader gs(logical_device, vk_ubo.get_DescriptorSetLayout(), sdsh.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
-
+		CameraUBO::vkUBO_T camera(extent, logical_device, physical_device);
+		vkCube::vkCubeT vkCube_shader(logical_device, camera.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
+		ground_shader::GroundShader gs(logical_device, camera.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
+		skybox_shader::SkyBox skybox(logical_device, camera.get_DescriptorSetLayout(), physical_device, renderpass, extent, graphics_queue, commandpool);
 
 		auto create_depth_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent]() {
-			auto depth_resource = vkCube::createDepthResources(logical_device, physical_device, extent);
+			auto depth_resource = vk::supp::createDepthResources(logical_device, physical_device, extent);
 			vk::raii::ImageView DepthImageView = vkCube::createDepthImageView(logical_device, depth_resource.first);
 			return std::pair(std::move(DepthImageView), std::move(depth_resource));
 		};
 
 		auto create_color_image = [&logical_device, &physical_device, &commandpool, &graphics_queue, &extent, format = surface_format.format]() {
-			auto color_resource = vkCube::createColorResources(logical_device, physical_device, extent, format);
+			auto color_resource = vk::supp::createColorResources(logical_device, physical_device, extent, format);
 			vk::raii::ImageView ColorImageView = vkCube::createColorImageView(logical_device, color_resource.first, format);
 			return std::pair(std::move(ColorImageView), std::move(color_resource));
 			};
@@ -339,15 +340,14 @@ int main() {
 
 
 		using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
-		update_f update_commandbuffer = [&renderpass, &vk_ubo, &extent, &vkCube_shader, &update_mouse_data, &xz, &update_position, &gs, &sdsh](
+		update_f update_commandbuffer = [&renderpass, &camera, &extent, &vkCube_shader, &update_mouse_data, &xz, &update_position, &gs, &sdsh, &skybox](
 			const vk::raii::CommandBuffer& command_buffer,
 			const vk::raii::Framebuffer& framebuffer
 			) {
-				vk_ubo.update_extent(extent);
-				vk_ubo.update_angles_by_delta(update_mouse_data());
+				camera.update_extent(extent);
+				camera.update_angles_by_delta(update_mouse_data());
 				auto pos = update_position(xz);
-				// vk_ubo.update_position_by_delta(pos[0], pos[1], pos[2]);
-				vk_ubo.update_device_buffer(pos[0], pos[1], pos[2]);
+				camera.update_device_buffer(pos[0], pos[1], pos[2]);
 
 				vk::Viewport viewport = {};
 				viewport.minDepth = 0.0f;
@@ -374,9 +374,10 @@ int main() {
 				command_buffer.setViewport(0, viewport);
 				command_buffer.setScissor(0, rect);
 
-				gs.setup_command_buffers(command_buffer, vk_ubo.get_DescriptorSet(), sdsh.get_DescriptorSet());
-				vkCube_shader.setup_command_buffers(command_buffer, vk_ubo.get_DescriptorSet(), sdsh.get_DescriptorSet());
-
+				skybox.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
+				vkCube_shader.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
+				gs.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
+				
 				command_buffer.endRenderPass();
 				command_buffer.end();
 			};

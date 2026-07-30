@@ -315,7 +315,7 @@ export namespace CameraUBO {
 				auto pos_delta = glm::vec3(dx, dy, dz);
 				auto&& [view, persp] = camera.get_Matrices();
 				auto forward = camera.get_Gaze_Direction().GetForwardVec3();
-				static glm::vec3 current_pos(0, 0, 0);
+				static glm::vec3 current_pos(0.0f, 0.0f, 0.0f);
 				
 				glm::vec3 right = glm::normalize(glm::cross(forward, worldUp));
 				glm::vec3 delta = right * dx + forward * dz + worldUp * dy;

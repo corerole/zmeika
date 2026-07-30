@@ -377,7 +377,9 @@ namespace vk {
 
 		vk::SampleCountFlagBits getMaxUsableSampleCount(const vk::raii::PhysicalDevice& physical_device) {
 			vk::PhysicalDeviceProperties physicalDeviceProperties = physical_device.getProperties();
-			vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
+			vk::SampleCountFlags counts = 
+				physicalDeviceProperties.limits.framebufferColorSampleCounts
+				&
 				physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 
 			if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
@@ -576,6 +578,104 @@ namespace vk {
 			}
 		}
 
+
+		std::pair<vk::raii::Image, vk::raii::DeviceMemory> createDepthResources(
+			const vk::raii::Device& device,
+			const vk::raii::PhysicalDevice& physicalDevice,
+			const vk::Extent2D& extent
+		) {
+			vk::Format depthFormat = vk::Format::eD32Sfloat;
+
+			vk::ImageCreateInfo imageInfo{};
+			imageInfo.imageType = vk::ImageType::e2D;
+			imageInfo.extent.width = extent.width;
+			imageInfo.extent.height = extent.height;
+			imageInfo.extent.depth = 1;
+			imageInfo.mipLevels = 1;
+			imageInfo.arrayLayers = 1;
+			imageInfo.format = depthFormat;
+			imageInfo.tiling = vk::ImageTiling::eOptimal;
+			imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+			imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+			imageInfo.samples = vk::supp::getMaxUsableSampleCount(physicalDevice);
+			imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+			vk::raii::Image depthImage = device.createImage(imageInfo);
+
+			vk::MemoryRequirements memRequirements = depthImage.getMemoryRequirements();
+
+			vk::MemoryAllocateInfo allocInfo{};
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = vk::supp::findMemoryType(
+				memRequirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				physicalDevice
+			);
+
+			vk::raii::DeviceMemory depthImageMemory = device.allocateMemory(allocInfo);
+
+			depthImage.bindMemory(*depthImageMemory, 0);
+
+			return std::pair(std::move(depthImage), std::move(depthImageMemory));
+		}
+
+		std::pair<vk::raii::Image, vk::raii::DeviceMemory> createColorResources(
+			const vk::raii::Device& device,
+			const vk::raii::PhysicalDevice& physicalDevice,
+			const vk::Extent2D& extent,
+			const vk::Format& colorFormat
+		) {
+			vk::ImageCreateInfo imageInfo{};
+			imageInfo.imageType = vk::ImageType::e2D;
+			imageInfo.extent.width = extent.width;
+			imageInfo.extent.height = extent.height;
+			imageInfo.extent.depth = 1;
+			imageInfo.mipLevels = 1;
+			imageInfo.arrayLayers = 1;
+			imageInfo.format = colorFormat;
+			imageInfo.tiling = vk::ImageTiling::eOptimal;
+			imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+			imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment;
+			imageInfo.samples = vk::supp::getMaxUsableSampleCount(physicalDevice);
+			imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+			vk::raii::Image colorImage = device.createImage(imageInfo);
+
+			vk::MemoryRequirements memRequirements = colorImage.getMemoryRequirements();
+
+			vk::MemoryAllocateInfo allocInfo{};
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = vk::supp::findMemoryType(
+				memRequirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				physicalDevice
+			);
+
+			vk::raii::DeviceMemory colorImageMemory = device.allocateMemory(allocInfo);
+
+			colorImage.bindMemory(*colorImageMemory, 0);
+
+			return std::pair(std::move(colorImage), std::move(colorImageMemory));
+		}
+
+		vk::raii::ImageView createColorImageView(
+			const vk::raii::Device& device,
+			const vk::raii::Image& colorImage,
+			const vk::Format& colorFormat
+		) {
+			vk::ImageViewCreateInfo viewInfo{};
+			viewInfo.image = *colorImage;
+			viewInfo.viewType = vk::ImageViewType::e2D;
+			viewInfo.format = colorFormat;
+			viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+			viewInfo.subresourceRange.baseMipLevel = 0;
+			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.baseArrayLayer = 0;
+			viewInfo.subresourceRange.layerCount = 1;
+
+			return vk::raii::ImageView(device, viewInfo);
+		}
+
 		void set_SwapchainFramebuffers(
 			ArrayLike auto& SwapchainFramebuffers,
 			const vk::raii::Device& Device,
@@ -741,7 +841,7 @@ namespace vk {
 						nullptr // pnext
 					);
 
-					vk::ResultValue<unsigned> ret = device.acquireNextImage2KHR(acquireInfo);
+					auto ret = device.acquireNextImage2KHR(acquireInfo);
 					vk::Result result(ret.result);
 					unsigned imageIndex = ret.value;
 
