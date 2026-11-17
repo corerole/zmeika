@@ -3118,6 +3118,7 @@ export namespace win_cpp {
 				case win_cpp::WindowMessage::WM_CHOOSEFONT_SETFLAGS: {  auto res = std::invoke(WM_CHOOSEFONT_SETFLAGS_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				case win_cpp::WindowMessage::WM_CHOOSEFONT_SETLOGFONT: {  auto res = std::invoke(WM_CHOOSEFONT_SETLOGFONT_callback);  if(res.has_value()) { return res.value(); } else { break; } }
 				// case win_cpp::WindowMessage::WM_SETTINGCHANGE: {  auto res = std::invoke(WM_SETTINGCHANGE_callback);  if(res.has_value()) { return res.value(); } else { break; } }
+				default: {}
 			}
 			return win::f::DefWindowProcW(hWnd, uMsg, wParam, lParam);
 		} // windowProc

@@ -1,3 +1,4 @@
+// ground_shader.cppm
 module;
 
 export module ground_shader;
@@ -6,20 +7,10 @@ import glm;
 import vulkan;
 import vulkan_helpers;
 import shaders_compiler;
+import spv_reflect;
 
 namespace {
-
 #if 0
-	struct GroundShader_s {
-		public:
-			glm::vec2 tileSize;
-			float lineWidth;
-			glm::vec3 color1;
-			glm::vec3 color2;
-			glm::vec3 lineColor;
-	};
-#endif
-
 	constexpr std::string_view vert_src(
 		R"(
 			#version 460 core
@@ -80,6 +71,7 @@ namespace {
 		)"
 	);
 
+
 	constexpr float distance = 500.0f;
 	constexpr std::array<float, 12> floorVertices = {
 		-distance, 0.0f, -distance,
@@ -92,6 +84,61 @@ namespace {
 		0, 1, 2,
 		0, 2, 3
 	};
+#else 
+	constexpr std::string_view vert_src(
+		R"(
+			#version 460 core
+
+			layout(set = 0, binding = 0) uniform X {
+				mat4 view;
+				mat4 projection;
+				vec3 world_base_point;
+			} camera;
+
+			layout(location = 0) in vec3 inPosition;
+			layout(location = 0) out vec3 position;
+
+			void main() {
+				mat4 model = mat4(1.0);
+				// model[3].xyz = vec3(0.0, camera.world_base_point.y, 0.0);
+				model[3].xyz = camera.world_base_point;
+				vec4 obj_pos = model * vec4(inPosition, 1.0);
+				gl_Position = camera.projection * camera.view * obj_pos;
+				position = camera.world_base_point - obj_pos.xyz;
+			}
+		)"
+	);
+
+	constexpr std::string_view frag_src(
+		R"(
+			#version 460 core
+
+			layout(location = 0) in vec3 position;
+			layout(location = 0) out vec4 outColor;
+
+			const vec4 color = vec4(0.08, 0.84, 0.82, 1.0);
+
+			void main() {
+				outColor = color;
+			}
+		)"
+	);
+
+	constexpr float distance = 2.0f;
+	constexpr std::array<float, 12> floorVertices = {
+		-distance, 0.0f, -distance,
+		 distance, 0.0f, -distance,
+		 distance, 0.0f,  distance,
+		-distance, 0.0f,  distance
+	};
+
+	constexpr std::array<unsigned, 6> floorIndices = {
+		0, 1, 2,
+		0, 2, 3
+	};
+
+#endif
+
 
 	vk::raii::PipelineLayout get_PipelineLayout_ground_shader(
 		const vk::raii::Device& Device,
@@ -105,10 +152,10 @@ namespace {
 
 	vk::raii::PipelineCache get_PipelineCache_ground_shader(const vk::raii::Device& Device) {
 		vk::PipelineCacheCreateInfo createInfo{};
-		createInfo.flags;
-		createInfo.initialDataSize;
-		createInfo.pInitialData;
-		createInfo.pNext;
+		// createInfo.flags;
+		// createInfo.initialDataSize;
+		// createInfo.pInitialData;
+		// createInfo.pNext;
 		return vk::raii::PipelineCache(Device, createInfo);
 	}
 
@@ -322,13 +369,9 @@ namespace {
 		);
 
 		auto stagingMemory = vk::raii::DeviceMemory(device, allocInfo);
-		stagingBuffer.bindMemory(stagingMemory, 0);
-
-		void* data = stagingMemory.mapMemory(0, vertices_size);
-		char* ptr = static_cast<char*>(data);
-		std::memcpy(ptr, floorVertices.data(), vertices_size);
-		stagingMemory.unmapMemory();
-
+		vk::supp::write_DeviceMemory(stagingMemory, floorVertices);
+		constexpr auto memory_offset = vk::DeviceSize(0);
+		stagingBuffer.bindMemory(stagingMemory, memory_offset);
 
 		vk::BufferCreateInfo vertexInfo{};
 		vertexInfo.size = vertices_size;
@@ -350,43 +393,8 @@ namespace {
 		auto vertexMemory = vk::raii::DeviceMemory(device, vertexAlloc);
 		vertexBuffer.bindMemory(vertexMemory, 0);
 
-		vk::CommandBufferAllocateInfo cmdAllocInfo(*commandPool, vk::CommandBufferLevel::ePrimary, 1);
-		auto cmd_buffs = device.allocateCommandBuffers(cmdAllocInfo);
-		auto cmdBuffer = std::move(cmd_buffs[0]);
-
-		cmdBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-
-		vk::BufferCopy copyRegion{};
-		copyRegion.srcOffset = 0;
-		copyRegion.dstOffset = 0;
-		copyRegion.size = vertices_size;
-		cmdBuffer.copyBuffer(*stagingBuffer, *vertexBuffer, copyRegion);
-
-		constexpr auto VK_QUEUE_FAMILY_IGNORED = std::numeric_limits<unsigned>::max();
-		vk::BufferMemoryBarrier barrier{};
-		barrier.buffer = *vertexBuffer;
-		barrier.size = vertices_size;
-		barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-		barrier.dstAccessMask = vk::AccessFlagBits::eVertexAttributeRead;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-		cmdBuffer.pipelineBarrier(
-			vk::PipelineStageFlagBits::eTransfer,
-			vk::PipelineStageFlagBits::eVertexInput,
-			vk::DependencyFlags(),
-			nullptr,
-			barrier,
-			nullptr
-		);
-
-		cmdBuffer.end();
-
-		vk::SubmitInfo submitInfo{};
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &*cmdBuffer;
-		graphicsQueue.submit(submitInfo, nullptr);
-		graphicsQueue.waitIdle();
+		auto copy_size = vk::DeviceSize(vertices_size);
+		vk::supp::CopyBuffer(device, commandPool, graphicsQueue, stagingBuffer, vertexBuffer, copy_size);
 
 		return std::pair(std::move(vertexBuffer), std::move(vertexMemory));
 	}
@@ -417,26 +425,9 @@ namespace {
 		);
 
 		auto stagingMemory = vk::raii::DeviceMemory(device, allocInfo);
-		stagingBuffer.bindMemory(stagingMemory, 0);
-
-		// void* data = stagingMemory.mapMemory(0, total_size);
-		// char* ptr = static_cast<char*>(data);
-		// TODO
-		// stagingMemory.unmapMemory();
-		{
-			auto data = std::span<std::byte>(
-				reinterpret_cast<std::byte*>(
-					stagingMemory.mapMemory(0, total_size)
-					)
-				, total_size
-			);
-			// const auto& i = vkCube::shaders_data::vIndices;
-			// using i_t = std::remove_cvref_t<decltype(i)>::value_type;
-			// auto tmp = std::span<i_t>(i.data(), i.size());
-			auto ii = std::as_bytes(std::span{ floorIndices });
-			std::copy(ii.begin(), ii.end(), data.begin());
-			stagingMemory.unmapMemory();
-		}
+		vk::supp::write_DeviceMemory(stagingMemory, floorIndices);
+		constexpr auto memory_offset = vk::DeviceSize(0);
+		stagingBuffer.bindMemory(stagingMemory, memory_offset);
 
 		vk::BufferCreateInfo indicesInfo{};
 		indicesInfo.size = total_size;
@@ -497,14 +488,12 @@ namespace {
 		return std::pair(std::move(indicesBuffer), std::move(indicesMemory));
 	}
 
-	auto frag_v = shaders_compiler::compile_shader(frag_src, shaders_compiler::shaderc_shader_kind::shaderc_glsl_fragment_shader);
-	auto vert_v = shaders_compiler::compile_shader(vert_src, shaders_compiler::shaderc_shader_kind::shaderc_glsl_vertex_shader);
+	auto compile_vert = shaders_compiler::compile_shader(vert_src, shaders_compiler::shaderc_shader_kind::shaderc_glsl_vertex_shader);
+	auto compile_frag = shaders_compiler::compile_shader(frag_src, shaders_compiler::shaderc_shader_kind::shaderc_glsl_fragment_shader); 
 
 } // anon ns
 
 export namespace ground_shader {
-#if 1
-
 	struct GroundShader {
 		private:
 			vk::raii::PipelineLayout pipeline_layout;
@@ -529,8 +518,8 @@ export namespace ground_shader {
 							physical_device,
 							renderpass,
 							extent,
-							vk::supp::installShader(logical_device, std::as_bytes(std::span<decltype(vert_v)::value_type>(vert_v.data(), vert_v.size()))),
-							vk::supp::installShader(logical_device, std::as_bytes(std::span<decltype(frag_v)::value_type>(frag_v.data(), frag_v.size()))),
+							vk::supp::installShader(logical_device, std::as_bytes(std::span{compile_vert.data(), compile_vert.size()})),
+							vk::supp::installShader(logical_device, std::as_bytes(std::span{compile_frag.data(), compile_frag.size()})),
 							pipeline_layout,
 							get_PipelineCache_ground_shader(logical_device)
 						)
@@ -538,6 +527,7 @@ export namespace ground_shader {
 				, vertex_buffer_and_mem(get_vertex_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 				, indices_buffer_and_mem(get_index_buffer(logical_device, physical_device, graphicsQueue, commandPool))
 			{}
+		
 
 		public:
 			void setup_command_buffers(
@@ -546,29 +536,11 @@ export namespace ground_shader {
 			) {
 				commandBuffer.bindVertexBuffers(0, { *vertex_buffer_and_mem.first }, { 0 });
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
-				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
+				constexpr auto indices_type = vk::supp::to_vulkan_index_type(floorIndices);
+				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, indices_type);
 				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera }, {});
 				commandBuffer.drawIndexed(floorIndices.size(), 1, 0, 0, 0);
 			}
 	};
-#endif
 } // ns ground_shader 
 
-#if 0
-
-/*
-			layout(set = 1, binding = 0) uniform {
-				mat4 model;
-			} model;
-*/
-
-/*
-			layout(set = 2, binding = 0) uniform {
-					vec2 tileSize;
-					float lineWidth;
-					vec3 color1;
-					vec3 color2;
-					vec3 lineColor;
-			} tileParams;
-*/
-#endif

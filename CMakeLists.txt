@@ -14,7 +14,6 @@ if(NOT USE_HANDMADE_MODULES_STD)
 	set(CMAKE_CXX_MODULE_STD ON)
 endif()
 
-
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS NO)
@@ -24,5 +23,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 project ("zmeika" LANGUAGES CXX)
 add_executable (${PROJECT_NAME})
 include("${CMAKE_CURRENT_LIST_DIR}/dep/dep.cmake")
+
 target_sources(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dwmapi Shcore)

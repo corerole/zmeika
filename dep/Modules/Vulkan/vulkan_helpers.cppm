@@ -1,10 +1,12 @@
-﻿module;
+﻿// vulkan_helpers.cppm
+module;
 
 export module vulkan_helpers;
 import std;
 import vulkan;
 
 namespace {
+	template<typename> inline constexpr bool always_false_v = false;
 #if 1
 	vk::PresentModeKHR create_PresentModeKHR(const vk::raii::PhysicalDevice& PhysDevice, const vk::raii::SurfaceKHR& Surface) {
 		std::vector<vk::PresentModeKHR> presentModes = PhysDevice.getSurfacePresentModesKHR(Surface);
@@ -41,6 +43,88 @@ namespace vk {
 			throw std::runtime_error("failed to find suitable memory type!");
 		}
 
+		constexpr vk::IndexType to_vulkan_index_type(const auto& cont) noexcept {
+			using cont_type = typename std::remove_cvref_t<decltype(cont)>;
+			using cont_value_type = typename cont_type::value_type;
+			static_assert(std::is_unsigned<cont_value_type>::value,
+				"Vulkan support only unsigned types for indices.");
+			constexpr unsigned CHAR_BIT = 8;
+			constexpr unsigned n_bits = sizeof(cont_value_type) * CHAR_BIT;
+			if constexpr(n_bits == 8u) {
+				return vk::IndexType::eUint8;
+			} else if (n_bits == 16u) {
+				return vk::IndexType::eUint16;
+			} else if (n_bits == 32u) {
+				return vk::IndexType::eUint32;
+			} else {
+				return vk::IndexType::eNoneKHR;
+			}
+		}
+
+		template<typename T> concept vector_like = std::true_type::value;
+		constexpr unsigned vectorsizeof(const vector_like auto& vec) noexcept {
+			using value_type = std::remove_cvref_t<decltype(vec)>::value_type;
+			return vec.size() * sizeof(value_type);
+		}
+
+		void write_DeviceMemory(vk::raii::DeviceMemory& memory, const auto& src) {
+			using cont_type = typename std::remove_cvref_t<decltype(src)>;
+			using cont_value_type = typename cont_type::value_type;
+			auto size = vectorsizeof(src);
+			auto begin = reinterpret_cast<std::add_pointer_t<cont_value_type>>(
+				memory.mapMemory(0, size)
+			);
+			std::copy(src.cbegin(), src.cend(), begin);
+			memory.unmapMemory();
+		}
+
+		void CopyBuffer(
+			const vk::raii::Device&  logical_device,
+			const vk::raii::CommandPool& commandPool,
+			const vk::raii::Queue& graphicsQueue,
+			const vk::raii::Buffer& src,
+			vk::raii::Buffer& dst,
+			vk::DeviceSize copy_size
+		) {
+			vk::CommandBufferAllocateInfo cmdAllocInfo(*commandPool, vk::CommandBufferLevel::ePrimary, 1);
+			auto cmd_buffs = logical_device.allocateCommandBuffers(cmdAllocInfo);
+			auto cmdBuffer = std::move(cmd_buffs[0]);
+
+			cmdBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+			vk::BufferCopy copyRegion{};
+			copyRegion.srcOffset = 0;
+			copyRegion.dstOffset = 0;
+			copyRegion.size = copy_size;
+			cmdBuffer.copyBuffer(*src, *dst, copyRegion);
+
+			constexpr auto VK_QUEUE_FAMILY_IGNORED = std::numeric_limits<unsigned>::max();
+			vk::BufferMemoryBarrier barrier{};
+			barrier.buffer = *dst;
+			barrier.size = copy_size;
+			barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+			// barrier.dstAccessMask = vk::AccessFlagBits::eVertexAttributeRead; vk::AccessFlagBits::eIndexRead;
+			barrier.dstAccessMask = vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+			cmdBuffer.pipelineBarrier(
+				vk::PipelineStageFlagBits::eTransfer,
+				vk::PipelineStageFlagBits::eAllCommands,
+				vk::DependencyFlags(),
+				nullptr,
+				barrier,
+				nullptr
+			);
+
+			cmdBuffer.end();
+
+			vk::SubmitInfo submitInfo{};
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &*cmdBuffer;
+			graphicsQueue.submit(submitInfo, nullptr);
+			graphicsQueue.waitIdle();
+		}
 
 		vk::raii::ShaderModule installShader(
 			const vk::raii::Device& device,
@@ -51,12 +135,6 @@ namespace vk {
 			createInfo.codeSize = ShaderCode.size();
 			createInfo.pCode = reinterpret_cast<const unsigned*>(ShaderCode.data());
 			return vk::raii::ShaderModule(device, createInfo);
-		}
-
-		template<typename T> concept vector_like = std::true_type::value;
-		constexpr unsigned vectorsizeof(const vector_like auto& vec) noexcept {
-			using value_type = std::remove_cvref_t<decltype(vec)>::value_type;
-			return vec.size() * sizeof(value_type);
 		}
 
 		std::pair<unsigned, unsigned> get_QueueFamilies(
@@ -731,7 +809,7 @@ namespace vk {
 		}
 #endif
 
-		template<size_t MAX_IMAGES = 32U>	struct Renderer {
+		template<std::size_t MAX_IMAGES = 32U> struct Renderer {
 				static constexpr std::size_t MAX_N_FENCE_BUFFER_BYTES = (MAX_IMAGES * (sizeof(vk::raii::Fence) + alignof(vk::raii::Fence)));
 				static constexpr std::size_t MAX_N_SEMAPHORE_BUFFER_BYTES = (MAX_IMAGES * (sizeof(vk::raii::Semaphore) + alignof(vk::raii::Semaphore)));
 
@@ -897,5 +975,22 @@ namespace vk {
 					return true;
 				}
 		};
-	}
+		
+		vk::raii::ImageView createDepthImageView(
+			const vk::raii::Device& device,
+			const vk::raii::Image& depthImage
+		) {
+			vk::ImageViewCreateInfo viewInfo{};
+			viewInfo.image = *depthImage;
+			viewInfo.viewType = vk::ImageViewType::e2D;
+			viewInfo.format = vk::Format::eD32Sfloat;
+			viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+			viewInfo.subresourceRange.baseMipLevel = 0;
+			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.baseArrayLayer = 0;
+			viewInfo.subresourceRange.layerCount = 1;
+
+			return vk::raii::ImageView(device, viewInfo);
+		}
+	}	
 }

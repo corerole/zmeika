@@ -473,7 +473,7 @@ win_cpp::Rect applyAspectRatio(
 			+ (frame.get_bottom() - frame.get_top())
 			+ (((area.get_right() - area.get_left())
 				- (frame.get_right() - frame.get_left())) / ratio);
-	}	else if (edge == win_cpp::Edges::WMSZ_TOPLEFT || edge == win_cpp::Edges::WMSZ_TOPRIGHT) {
+	} else if (edge == win_cpp::Edges::WMSZ_TOPLEFT || edge == win_cpp::Edges::WMSZ_TOPRIGHT) {
 		area.get_top() =
 			area.get_bottom()
 			- (frame.get_bottom() - frame.get_top())

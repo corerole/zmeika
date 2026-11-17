@@ -1,0 +1,9 @@
+set(OSD_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
+target_sources(
+	${PROJECT_NAME} PUBLIC
+	FILE_SET CXX_MODULES 
+	BASE_DIRS ${OSD_DIR}
+	FILES
+		"${OSD_DIR}/OSD.cppm"
+)

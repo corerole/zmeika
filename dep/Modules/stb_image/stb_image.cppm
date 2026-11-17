@@ -39,8 +39,7 @@ export namespace stb_image {
 	RawPic load_image(const std::string& filepath) {
 		RawPic res;
 		int h = 0; int w = 0; int c = 0;
-		unsigned char* ptr = stb_image_c_api::stbi_load(filepath.c_str(), &w, &h, &c, 4);
-		// stb_image_c_api::stbi_write_png("test.png", w, h, c, ptr, w*c);
+		unsigned char* ptr = stb_image_c_api::stbi_load(filepath.c_str(), &w, &h, &c, 0);
 		res.height = h;
 		res.width = w;
 		res.channels = c;

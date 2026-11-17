@@ -43,7 +43,6 @@ namespace {
 		layouts[0].stageFlags = vk::ShaderStageFlagBits::eVertex;
 
 		vk::DescriptorSetLayoutCreateInfo descSetLayoutCreateInfo({}, layouts);
-
 		return vk::raii::DescriptorSetLayout(Device, descSetLayoutCreateInfo);
 	}
 
@@ -75,12 +74,12 @@ namespace {
 
 		vk::raii::DeviceMemory uboBufferMemory(device, uboAlloc);
 		buffer.bindMemory(uboBufferMemory, 0);
-		return std::pair(std::forward<decltype(buffer)>(buffer), std::forward<decltype(uboBufferMemory)>(std::move(uboBufferMemory)));
+		return std::pair(std::move(buffer), std::move(uboBufferMemory));
 	}
 
 } // anon ns
 
-export namespace CameraUBO {
+export namespace Camera {
 	struct GazeDirection final {
 		static constexpr const float PITCH_LIMIT = glm::radians(89.9f);
 		private:
@@ -249,7 +248,7 @@ export namespace CameraUBO {
 			CameraUBO(const AR& ar, const GazeDirection& gd = {}) : gd(gd), ar(ar) {}
 	};
 
-	struct vkUBO_T {
+	struct Camera {
 		private:
 			CameraUBO camera;
 			vk::raii::DescriptorPool desc_pool;
@@ -258,7 +257,7 @@ export namespace CameraUBO {
 			std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> ubo_buffer_and_mem;
 
 		public:
-			vkUBO_T(
+			Camera(
 				const vk::Extent2D& extent,
 				const vk::raii::Device& logical_device,
 				const vk::raii::PhysicalDevice& physical_device

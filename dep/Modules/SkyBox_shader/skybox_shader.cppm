@@ -161,7 +161,7 @@ namespace {
 		return mem;
 	}
 
-	void CopyToImg(
+	void CopyToVkImage(
 		const vk::raii::Device& device,
 		const vk::raii::PhysicalDevice& physicalDevice,
 		const vk::raii::CommandPool& commandPool,
@@ -363,65 +363,15 @@ namespace {
 		vk::ImageViewCreateInfo viewInfo{};
 		viewInfo.image = *skyboxImage;
 		viewInfo.viewType = vk::ImageViewType::eCube;
-		viewInfo.format = vk::Format::eR8G8B8A8Srgb; // ваш формат
+		viewInfo.format = vk::Format::eR8G8B8A8Srgb;
 		viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
 		viewInfo.subresourceRange.baseMipLevel = 0;
 		viewInfo.subresourceRange.levelCount = 1;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 6; // все 6 граней
+		viewInfo.subresourceRange.layerCount = 6;
 
 		return vk::raii::ImageView(device, viewInfo);
 	}
-
-	struct SkyboxSampler {
-		private:
-			vk::raii::Sampler sampler;
-			vk::raii::Image image;
-			vk::raii::DeviceMemory image_memory;
-			vk::raii::ImageView image_view;
-			vk::raii::DescriptorSetLayout desc_set_layout;
-			vk::raii::DescriptorPool desc_pool;
-			vk::raii::DescriptorSet desc_set;
-
-		public:
-			SkyboxSampler(
-				const vk::raii::Device& device,
-				const vk::raii::PhysicalDevice& physicalDevice,
-				const vk::raii::CommandPool& commandPool,
-				const vk::raii::Queue& graphicsQueue
-			)
-				: sampler(get_Sampler(device))
-				, image(get_Sampler_Image(1024, 1024, device))
-				, image_memory(get_Sampler_Image_DeviceMemory(device, physicalDevice, image))
-				, image_view(get_Sampler_ImageView(device, image))
-				, desc_set_layout(get_Sampler_DescriptorSetLayout(device))
-				, desc_pool(get_Sampler_DescriptorPool(device))
-				, desc_set(get_Sampler_DescriptorSet(device, desc_pool, desc_set_layout))
-			{
-			
-				CopyToImg(device, physicalDevice, commandPool, image, graphicsQueue);
-
-				vk::DescriptorImageInfo imageInfo{};
-				imageInfo.sampler = *sampler;
-				imageInfo.imageView = *image_view;
-				imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-				vk::WriteDescriptorSet write{};
-				write.dstSet = *desc_set;
-				write.dstBinding = 0;
-				write.dstArrayElement = 0;
-				write.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-				write.descriptorCount = 1;
-				write.pImageInfo = &imageInfo;
-
-				device.updateDescriptorSets(write, nullptr);
-			}
-
-		public:
-			const vk::raii::DescriptorSetLayout& get_DescriptorSetLayout() const { return desc_set_layout; }
-			const vk::raii::DescriptorSet& get_DescriptorSet() const { return desc_set; }
-	
-	};
 
 	auto frag_v = shaders_compiler::compile_shader(frag, shaders_compiler::shaderc_shader_kind::shaderc_glsl_fragment_shader);
 	auto vert_v = shaders_compiler::compile_shader(vert, shaders_compiler::shaderc_shader_kind::shaderc_glsl_vertex_shader);
@@ -439,10 +389,10 @@ namespace {
 
 	vk::raii::PipelineCache get_PipelineCache(const vk::raii::Device& Device) {
 		vk::PipelineCacheCreateInfo createInfo{};
-		createInfo.flags;
-		createInfo.initialDataSize;
-		createInfo.pInitialData;
-		createInfo.pNext;
+		// createInfo.flags;
+		// createInfo.initialDataSize;
+		// createInfo.pInitialData;
+		// createInfo.pNext;
 		return vk::raii::PipelineCache(Device, createInfo);
 	}
 
@@ -828,6 +778,55 @@ namespace {
 } // anon ns
 
 export namespace skybox_shader {
+	struct SkyboxSampler {
+		private:
+			vk::raii::Sampler sampler;
+			vk::raii::Image image;
+			vk::raii::DeviceMemory image_memory;
+			vk::raii::ImageView image_view;
+			vk::raii::DescriptorSetLayout desc_set_layout;
+			vk::raii::DescriptorPool desc_pool;
+			vk::raii::DescriptorSet desc_set;
+
+		public:
+			SkyboxSampler(
+				const vk::raii::Device& device,
+				const vk::raii::PhysicalDevice& physicalDevice,
+				const vk::raii::CommandPool& commandPool,
+				const vk::raii::Queue& graphicsQueue
+			)
+				: sampler(get_Sampler(device))
+				, image(get_Sampler_Image(1024, 1024, device))
+				, image_memory(get_Sampler_Image_DeviceMemory(device, physicalDevice, image))
+				, image_view(get_Sampler_ImageView(device, image))
+				, desc_set_layout(get_Sampler_DescriptorSetLayout(device))
+				, desc_pool(get_Sampler_DescriptorPool(device))
+				, desc_set(get_Sampler_DescriptorSet(device, desc_pool, desc_set_layout))
+			{
+			
+				CopyToVkImage(device, physicalDevice, commandPool, image, graphicsQueue);
+
+				vk::DescriptorImageInfo imageInfo{};
+				imageInfo.sampler = *sampler;
+				imageInfo.imageView = *image_view;
+				imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+				vk::WriteDescriptorSet write{};
+				write.dstSet = *desc_set;
+				write.dstBinding = 0;
+				write.dstArrayElement = 0;
+				write.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+				write.descriptorCount = 1;
+				write.pImageInfo = &imageInfo;
+
+				device.updateDescriptorSets(write, nullptr);
+			}
+
+		public:
+			const vk::raii::DescriptorSetLayout& get_DescriptorSetLayout() const { return desc_set_layout; }
+			const vk::raii::DescriptorSet& get_DescriptorSet() const { return desc_set; }
+	
+	};
 #if 1
 	struct SkyBox {
 		private:
@@ -873,7 +872,8 @@ export namespace skybox_shader {
 			) {
 				commandBuffer.bindVertexBuffers(0, { vertex_buffer_and_mem.first }, { 0 });
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
-				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, vk::IndexType::eUint16);
+				constexpr auto indices_type = vk::supp::to_vulkan_index_type(indices);
+				commandBuffer.bindIndexBuffer(*indices_buffer_and_mem.first, 0, indices_type);
 				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, { desc_set_camera, sampler.get_DescriptorSet() }, {});
 				commandBuffer.drawIndexed(indices.size(), 1, 0, 0, 0);
 			}

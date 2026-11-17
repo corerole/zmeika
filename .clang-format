@@ -1,0 +1,46 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Стандарт и базовые отступы
+Standard: c++26
+IndentWidth: 2
+TabWidth: 2
+UseTab: Always
+ColumnLimit: 120
+
+# Указатели и ссылки — слева, как в коде: const std::string& x, char** argv
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Фигурные скобки — на той же строке
+BreakBeforeBraces: Attach
+
+# Разрешаем короткие функции, лямбды и блоки в одну строку
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+
+# Модификаторы доступа: public: без отступа (стандартный C++ стиль).
+# Если хочешь, чтобы public: был с отступом, поставь AccessModifierOffset: 0.
+IndentAccessModifiers: true
+AccessModifierOffset: -2
+
+# Прочее
+IndentCaseLabels: true
+NamespaceIndentation: All
+SortIncludes: false
+IncludeBlocks: Preserve
+AlignAfterOpenBracket: Align
+BinPackArguments: false
+BinPackParameters: false
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+AlignOperands: true
+AlignTrailingComments: true
+ReflowComments: true
+SpacesBeforeTrailingComments: 2

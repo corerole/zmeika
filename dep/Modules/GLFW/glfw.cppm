@@ -220,7 +220,12 @@ export namespace glfw {
 	};
 
 	std::wstring StringToWString(std::string_view sv) {
-		return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(sv.data(), sv.data() + sv.size());
+		// return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(sv.data(), sv.data() + sv.size());
+		return std::wstring(sv.begin(), sv.end());
+	}
+	
+	std::wstring StringToWString(const std::string& sv) {
+		return std::wstring(sv.cbegin(), sv.cend());
 	}
 
 	struct Title {
