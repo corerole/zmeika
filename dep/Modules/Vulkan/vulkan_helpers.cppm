@@ -67,12 +67,13 @@ namespace vk {
 			return vec.size() * sizeof(value_type);
 		}
 
-		void write_DeviceMemory(vk::raii::DeviceMemory& memory, const auto& src) {
-			using cont_type = typename std::remove_cvref_t<decltype(src)>;
-			using cont_value_type = typename cont_type::value_type;
-			auto size = vectorsizeof(src);
-			auto begin = reinterpret_cast<std::add_pointer_t<cont_value_type>>(
-				memory.mapMemory(0, size)
+		void write_DeviceMemory(
+			vk::raii::DeviceMemory& memory,
+			std::ranges::input_range auto&& src
+		) {
+			using value_type = std::ranges::range_value_t<decltype(src)>;
+			auto begin = reinterpret_cast<std::add_pointer_t<value_type>>(
+				memory.mapMemory(0, src.size())
 			);
 			std::copy(src.cbegin(), src.cend(), begin);
 			memory.unmapMemory();

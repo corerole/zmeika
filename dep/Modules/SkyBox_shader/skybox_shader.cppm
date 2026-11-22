@@ -869,7 +869,7 @@ export namespace skybox_shader {
 			void setup_command_buffers(
 				const vk::raii::CommandBuffer& commandBuffer,
 				const vk::raii::DescriptorSet& desc_set_camera
-			) {
+			) const {
 				commandBuffer.bindVertexBuffers(0, { vertex_buffer_and_mem.first }, { 0 });
 				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 				constexpr auto indices_type = vk::supp::to_vulkan_index_type(indices);

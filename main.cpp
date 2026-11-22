@@ -14,37 +14,6 @@ import spv_reflect; //
 
 using namespace std::chrono_literals;
 
-template<typename T>
-struct Resetter {
-	using value_type = T;
-	using reference = std::add_lvalue_reference_t<value_type>;
-	using const_value_type = std::add_const_t<value_type>;
-	using const_reference = std::add_lvalue_reference_t<const_value_type>;
-
-	private:
-		value_type value;
-
-	public:
-		template<typename... Args> Resetter(Args&&... args) : value(std::forward<Args>(args)...) {}
-		Resetter(value_type&& value) : value(value) {}
-
-	public:
-		constexpr reference operator()() noexcept { return value; }
-		constexpr const_reference operator()() const noexcept { return value; }
-		template<typename... Args> void reset(Args&&... args) { value = value_type(std::forward<Args>(args)...); }
-		void reset(value_type&& obj) { value = obj; }
-};
-
-template<typename T, typename... Args> auto make_resetable(Args&&... args) {
-	using ResetableType = Resetter<T>;
-	return ResetableType(std::forward<Args>(args)...);
-}
-
-template<typename T> auto make_resetable(T&& obj) {
-	using ResetableType = Resetter<T>;
-	return ResetableType(obj);
-}
-
 template <typename T> struct Data {
 	private:
 		mutable AtomicFlagMutex mutex;
@@ -100,7 +69,6 @@ int main() {
 	std::size_t height = 10;
 	std::size_t width = 10;
 	std::atomic<snake_logic::Action> snake_action = {};
-	snake_logic::SnakeGame snake(height, width);
 
 	glfw::WindowCreateInfo info = {};
 	info.title = glfw::Title(AppName);
@@ -251,7 +219,7 @@ int main() {
 			return pm;
 		};
 
-		vk::PresentModeKHR present_mode = vk::PresentModeKHR::eImmediate;	// choice_present_mode();
+		vk::PresentModeKHR present_mode = choice_present_mode();
 		vk::raii::SwapchainKHR swapchain = vk::supp::get_Swapchain(
 				logical_device, physical_device, surface, GaPq, surface_format.format, extent, present_mode);
 		vk::raii::RenderPass renderpass = vk::supp::get_RenderPass(logical_device, physical_device, surface_format.format);
@@ -334,9 +302,8 @@ int main() {
 		update_swapchain_images();
 
 		constexpr std::size_t VK_IMAGE_VIEWS_N_ELEMS = MAX_IMAGES;
-		constexpr std::size_t VK_IMAGE_VIEWS_SIZE =
-				VK_IMAGE_VIEWS_N_ELEMS * (sizeof(vk::raii::ImageView) + alignof(vk::raii::ImageView));
-		alignas(alignof(vk::raii::ImageView)) std::array<std::byte, VK_IMAGE_VIEWS_SIZE> VK_IMAGE_VIEWS_BUFFER = {};
+		constexpr std::size_t VK_IMAGE_VIEWS_SIZE = VK_IMAGE_VIEWS_N_ELEMS * sizeof(vk::raii::ImageView);
+		std::array<std::byte, VK_IMAGE_VIEWS_SIZE> VK_IMAGE_VIEWS_BUFFER = {};
 		std::pmr::monotonic_buffer_resource VK_IMAGE_VIEWS_RESOURCE(
 				VK_IMAGE_VIEWS_BUFFER.data(), VK_IMAGE_VIEWS_BUFFER.size(), nullptr);
 		std::pmr::vector<vk::raii::ImageView> swapchain_ImageViews(&VK_IMAGE_VIEWS_RESOURCE);
@@ -348,9 +315,8 @@ int main() {
 		update_image_views();
 
 		constexpr std::size_t VK_FRAMEBUFFERS_N_ELEMS = MAX_IMAGES;
-		constexpr std::size_t VK_FRAMEBUFFERS_SIZE =
-				VK_FRAMEBUFFERS_N_ELEMS * (sizeof(vk::raii::Framebuffer) + alignof(vk::raii::Framebuffer));
-		alignas(alignof(vk::raii::Framebuffer)) std::array<std::byte, VK_FRAMEBUFFERS_SIZE> VK_FRAMEBUFFERS_BUFFER = {};
+		constexpr std::size_t VK_FRAMEBUFFERS_SIZE = VK_FRAMEBUFFERS_N_ELEMS * sizeof(vk::raii::Framebuffer);
+		std::array<std::byte, VK_FRAMEBUFFERS_SIZE> VK_FRAMEBUFFERS_BUFFER = {};
 		std::pmr::monotonic_buffer_resource VK_FRAMEBUFFERS_RESOURCE(
 				VK_FRAMEBUFFERS_BUFFER.data(), VK_FRAMEBUFFERS_BUFFER.size(), nullptr);
 		std::pmr::vector<vk::raii::Framebuffer> framebuffers(&VK_FRAMEBUFFERS_RESOURCE);
@@ -373,10 +339,8 @@ int main() {
 		update_framebuffes();
 
 		constexpr std::size_t VK_COMMANDBUFFERS_N_ELEMS = MAX_IMAGES;
-		constexpr std::size_t VK_COMMANDBUFFERS_SIZE =
-				VK_COMMANDBUFFERS_N_ELEMS * (sizeof(vk::raii::CommandBuffer) + alignof(vk::raii::CommandBuffer));
-		alignas(alignof(vk::raii::CommandBuffer)) std::array<std::byte, VK_COMMANDBUFFERS_SIZE> VK_COMMANDBUFFERS_BUFFER =
-				{};
+		constexpr std::size_t VK_COMMANDBUFFERS_SIZE = VK_COMMANDBUFFERS_N_ELEMS * sizeof(vk::raii::CommandBuffer);
+		std::array<std::byte, VK_COMMANDBUFFERS_SIZE> VK_COMMANDBUFFERS_BUFFER = {};
 		std::pmr::monotonic_buffer_resource VK_COMMANDBUFFERS_RESOURCE(
 				VK_COMMANDBUFFERS_BUFFER.data(), VK_COMMANDBUFFERS_BUFFER.size(), nullptr);
 		std::pmr::vector<vk::raii::CommandBuffer> command_buffers(&VK_COMMANDBUFFERS_RESOURCE);
@@ -397,8 +361,11 @@ int main() {
 		alloc_command_buffers();
 
 		std::pair<float, float> xz;
-		auto key_callback = [xzr = std::ref(xz), wnd = std::ref(window), snake_action_ = std::ref(snake_action)](
-														glfw::Key key, unsigned scancode, glfw::KeyState key_state, glfw::CharModsFlags mods) {
+		auto key_callback = [
+			xzr = std::ref(xz),
+			wnd = std::ref(window),
+			snake_action_ = std::ref(snake_action)
+		](glfw::Key key, unsigned scancode, glfw::KeyState key_state, glfw::CharModsFlags mods) {
 			auto& [x, z] = xzr.get();
 			if (key_state == glfw::KeyState::press) {
 				switch (key) {
@@ -504,15 +471,41 @@ int main() {
 			return {rx, ry};
 		};
 
-		using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
-		update_f update_commandbuffer =
-				[&renderpass, &camera, &extent, &vkCube_shader, &update_mouse_data, &xz, &update_position, &sdsh, &skybox, &gs](
-						const vk::raii::CommandBuffer& command_buffer, const vk::raii::Framebuffer& framebuffer) {
-					camera.update_extent(extent);
-					camera.update_angles_by_delta(update_mouse_data());
-					auto pos = update_position(xz);
-					camera.update_device_buffer(pos[0], pos[1], pos[2]);
+#if 1
+		auto update_camera = [&camera, &extent, &update_mouse_data, &update_position, &xz](){
+			camera.update_extent(extent);
+			camera.update_angles_by_delta(update_mouse_data());
+			auto pos = update_position(xz);
+			camera.update_device_buffer(pos[0], pos[1], pos[2]);
+		};
+#endif
 
+		using binded_camera_update_function = std::function<void(const vk::raii::CommandBuffer&)>;
+		using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
+
+		std::pmr::vector<binded_camera_update_function> shaders_setup_command_buffer;
+		auto skybox_ucb = std::bind_back(
+			std::bind_front(&decltype(skybox)::setup_command_buffers, std::ref(skybox))
+			, std::ref(camera.get_DescriptorSet())
+		);
+		auto gs_ucb = std::bind_back(
+			std::bind_front(&decltype(gs)::setup_command_buffers, std::ref(gs))
+			, std::ref(camera.get_DescriptorSet())
+		);
+		auto cube_ucb = std::bind_back(
+			std::bind_front(&decltype(vkCube_shader)::setup_command_buffers, std::ref(vkCube_shader))
+			, std::ref(camera.get_DescriptorSet())
+		);
+		shaders_setup_command_buffer.push_back(std::move(skybox_ucb));
+		shaders_setup_command_buffer.push_back(std::move(gs_ucb));
+		shaders_setup_command_buffer.push_back(std::move(cube_ucb));
+
+
+		update_f update_commandbuffer =
+				[&renderpass, &extent, &update_mouse_data, shaders = std::cref(shaders_setup_command_buffer)]( 
+					const vk::raii::CommandBuffer& command_buffer,
+					const vk::raii::Framebuffer& framebuffer
+				) {
 					vk::Viewport viewport = {};
 					viewport.minDepth = 0.0f;
 					viewport.maxDepth = 1.0f;
@@ -537,10 +530,10 @@ int main() {
 
 					command_buffer.setViewport(0, viewport);
 					command_buffer.setScissor(0, rect);
-
-					skybox.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
-					vkCube_shader.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
-					gs.setup_command_buffers(command_buffer, camera.get_DescriptorSet());
+					
+					for(const auto& shader : shaders.get()) {
+						std::invoke(shader, std::cref(command_buffer));
+					}
 
 					command_buffer.endRenderPass();
 					command_buffer.end();
@@ -598,7 +591,6 @@ int main() {
 		using field_type = std::vector<std::vector<snake_logic::FieldObjects>>;
 
 		Data<field_type> field_sync({});
-
 		auto snake_func = [action = std::ref(snake_action),
 											 export_field = std::ref(field_sync)](std::stop_token s) mutable {
 			snake_logic::SnakeGame snake(10, 10);
@@ -636,12 +628,12 @@ int main() {
 			}
 		};
 		std::jthread snake_thread(std::move(snake_func));
-		
+
 		auto print_fps = [
 			counter = 0,
-			start = std::chrono::system_clock::now()
+			start = std::chrono::high_resolution_clock::now()
 		]() mutable {
-			auto now = std::chrono::system_clock::now();
+			auto now = std::chrono::high_resolution_clock::now();
 			auto elapsed = now - start;
 			++counter;
 			if(elapsed > 1s) {
@@ -652,6 +644,7 @@ int main() {
 		};
 
 		while (!called.load(std::memory_order_relaxed)) {
+			update_camera(); // REMOVE IT
 			auto res = render_frame();
 			print_fps();
 			if (!res) {
@@ -665,6 +658,6 @@ int main() {
 		}
 		logical_device.waitIdle();
 		// surface destroyed
-	}
+	} 
 	ready.store(true, std::memory_order_relaxed);
 }

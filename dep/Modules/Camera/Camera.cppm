@@ -322,9 +322,10 @@ export namespace Camera {
 
 				CameraUBO_s ubo(view, persp, current_pos);
 
-				void* uboPtr = ubo_buffer_and_mem.second.mapMemory(0, sizeof(ubo));
-				std::memcpy(uboPtr, &ubo, sizeof(ubo));
-				ubo_buffer_and_mem.second.unmapMemory();
+				auto begin = &ubo; 
+				auto end = begin + 1;
+				auto&& range = std::ranges::subrange(begin, end);
+				vk::supp::write_DeviceMemory(ubo_buffer_and_mem.second, range);
 			}
 	};
 } // ns UBO
