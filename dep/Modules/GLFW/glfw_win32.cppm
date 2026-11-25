@@ -1,226 +1,225 @@
 ﻿module;
 
-export module glfw_win32_window;
+export module glfw_win32;
 import std;
 import flags;
-import madmap;
 import win_cpp;
 // import windowProc;
-import glfw;
-import vulkan;
+import glfw_base;
+import vulkan; // REMOVE IT!
 
-using translate_map_type = std::unordered_map<win_cpp::WindowsScancode, glfw::Key>;
+using translate_map_type = std::unordered_map<win_cpp::WindowsScancode, glfw_base::Key>;
 translate_map_type windows_keyboard_keys_to_glfw_keys = {
-			{ win_cpp::WindowsScancode::NULL, glfw::Key::NULL },
-			{ win_cpp::WindowsScancode::vA, glfw::Key::vA },
-			{ win_cpp::WindowsScancode::vB, glfw::Key::vB },
-			{ win_cpp::WindowsScancode::vC, glfw::Key::vC },
-			{ win_cpp::WindowsScancode::vD, glfw::Key::vD },
-			{ win_cpp::WindowsScancode::vE, glfw::Key::vE },
-			{ win_cpp::WindowsScancode::vF, glfw::Key::vF },
-			{ win_cpp::WindowsScancode::vG, glfw::Key::vG },
-			{ win_cpp::WindowsScancode::vH, glfw::Key::vH },
-			{ win_cpp::WindowsScancode::vI, glfw::Key::vI },
-			{ win_cpp::WindowsScancode::vJ, glfw::Key::vJ },
-			{ win_cpp::WindowsScancode::vK, glfw::Key::vK },
-			{ win_cpp::WindowsScancode::vL, glfw::Key::vL },
-			{ win_cpp::WindowsScancode::vM, glfw::Key::vM },
-			{ win_cpp::WindowsScancode::vN, glfw::Key::vN },
-			{ win_cpp::WindowsScancode::vO, glfw::Key::vO },
-			{ win_cpp::WindowsScancode::vP, glfw::Key::vP },
-			{ win_cpp::WindowsScancode::vQ, glfw::Key::vQ },
-			{ win_cpp::WindowsScancode::vR, glfw::Key::vR },
-			{ win_cpp::WindowsScancode::vS, glfw::Key::vS },
-			{ win_cpp::WindowsScancode::vT, glfw::Key::vT },
-			{ win_cpp::WindowsScancode::vU, glfw::Key::vU },
-			{ win_cpp::WindowsScancode::vV, glfw::Key::vV },
-			{ win_cpp::WindowsScancode::vW, glfw::Key::vW },
-			{ win_cpp::WindowsScancode::vX, glfw::Key::vX },
-			{ win_cpp::WindowsScancode::vY, glfw::Key::vY },
-			{ win_cpp::WindowsScancode::vZ, glfw::Key::vZ },
-			{ win_cpp::WindowsScancode::v1_and_Bang, glfw::Key::v1_and_Bang },
-			{ win_cpp::WindowsScancode::v2_and_At, glfw::Key::v2_and_At },
-			{ win_cpp::WindowsScancode::v3_and_Hash, glfw::Key::v3_and_Hash },
-			{ win_cpp::WindowsScancode::v4_and_Dollar, glfw::Key::v4_and_Dollar },
-			{ win_cpp::WindowsScancode::v5_and_Percent, glfw::Key::v5_and_Percent },
-			{ win_cpp::WindowsScancode::v6_and_Caret, glfw::Key::v6_and_Caret },
-			{ win_cpp::WindowsScancode::v7_and_Ampersand, glfw::Key::v7_and_Ampersand },
-			{ win_cpp::WindowsScancode::v8_and_Star, glfw::Key::v8_and_Star },
-			{ win_cpp::WindowsScancode::v9_and_Left_Bracket, glfw::Key::v9_and_Left_Bracket },
-			{ win_cpp::WindowsScancode::v0_and_Right_Brackert, glfw::Key::v0_and_Right_Brackert },
-			{ win_cpp::WindowsScancode::vReturnEnter, glfw::Key::vReturnEnter },
-			{ win_cpp::WindowsScancode::vEscape, glfw::Key::vEscape },
-			{ win_cpp::WindowsScancode::vDelete, glfw::Key::vDelete },
-			{ win_cpp::WindowsScancode::vTab, glfw::Key::vTab },
-			{ win_cpp::WindowsScancode::vSpaceBar, glfw::Key::vSpaceBar },
-			{ win_cpp::WindowsScancode::vDash_and_underscore, glfw::Key::vDash_and_underscore },
-			{ win_cpp::WindowsScancode::vEquals_and_Plus, glfw::Key::vEquals_and_Plus },
-			{ win_cpp::WindowsScancode::vLeft_Brace, glfw::Key::vLeft_Brace },
-			{ win_cpp::WindowsScancode::vRight_Brace, glfw::Key::vRight_Brace },
-			{ win_cpp::WindowsScancode::vBackslash_and_Pipe, glfw::Key::vBackslash_and_Pipe },
-			{ win_cpp::WindowsScancode::vNonUS_Slash_and_Tilde, glfw::Key::vNonUS_Slash_and_Tilde }, // orig,  
-			{ win_cpp::WindowsScancode::vSemiColon_and_Colon, glfw::Key::vSemiColon_and_Colon },
-			{ win_cpp::WindowsScancode::vApostrophe_and_Double_Quotation_Mark, glfw::Key::vApostrophe_and_Double_Quotation_Mark },
-			{ win_cpp::WindowsScancode::vGrave_Accent_and_Tilde, glfw::Key::vGrave_Accent_and_Tilde },
-			{ win_cpp::WindowsScancode::vComma_and_LessThen, glfw::Key::vComma_and_LessThen },
-			{ win_cpp::WindowsScancode::vPeriod_and_GreaterThen, glfw::Key::vPeriod_and_GreaterThen },
-			{ win_cpp::WindowsScancode::vForwardSlash_and_QuestionMark, glfw::Key::vForwardSlash_and_QuestionMark },
-			{ win_cpp::WindowsScancode::vCapsLock, glfw::Key::vCapsLock },
-			{ win_cpp::WindowsScancode::vF1, glfw::Key::vF1 },
-			{ win_cpp::WindowsScancode::vF2, glfw::Key::vF2 },
-			{ win_cpp::WindowsScancode::vF3, glfw::Key::vF3 },
-			{ win_cpp::WindowsScancode::vF4, glfw::Key::vF4 },
-			{ win_cpp::WindowsScancode::vF5, glfw::Key::vF5 },
-			{ win_cpp::WindowsScancode::vF6, glfw::Key::vF6 },
-			{ win_cpp::WindowsScancode::vF7, glfw::Key::vF7 },
-			{ win_cpp::WindowsScancode::vF8, glfw::Key::vF8 },
-			{ win_cpp::WindowsScancode::vF9, glfw::Key::vF9 },
-			{ win_cpp::WindowsScancode::vF10, glfw::Key::vF10 },
-			{ win_cpp::WindowsScancode::vF11, glfw::Key::vF11 },
-			{ win_cpp::WindowsScancode::vF12, glfw::Key::vF12 },
-			{ win_cpp::WindowsScancode::vPrintScreen, glfw::Key::vPrintScreen },
-			{ win_cpp::WindowsScancode::vScrollLock, glfw::Key::vScrollLock },
-			{ win_cpp::WindowsScancode::vPause, glfw::Key::vPause },
-			{ win_cpp::WindowsScancode::vInsert, glfw::Key::vInsert },
-			{ win_cpp::WindowsScancode::vHome, glfw::Key::vHome },
-			{ win_cpp::WindowsScancode::vPageUp, glfw::Key::vPageUp },
-			{ win_cpp::WindowsScancode::vDeleteForward, glfw::Key::vDeleteForward },
-			{ win_cpp::WindowsScancode::vEnd, glfw::Key::vEnd },
-			{ win_cpp::WindowsScancode::vPageDown, glfw::Key::vPageDown },
-			{ win_cpp::WindowsScancode::vRightArrow, glfw::Key::vRightArrow },
-			{ win_cpp::WindowsScancode::vLeftArrow, glfw::Key::vLeftArrow },
-			{ win_cpp::WindowsScancode::vDownArrow, glfw::Key::vDownArrow },
-			{ win_cpp::WindowsScancode::vUpArrow, glfw::Key::vUpArrow },
-			{ win_cpp::WindowsScancode::vNumLock_and_Clear, glfw::Key::vNumLock_and_Clear },
-			{ win_cpp::WindowsScancode::vForwardSlash, glfw::Key::vForwardSlash },
-			{ win_cpp::WindowsScancode::vStar, glfw::Key::vStar },
-			{ win_cpp::WindowsScancode::vDash, glfw::Key::vDash },
-			{ win_cpp::WindowsScancode::vPlus, glfw::Key::vPlus },
-			{ win_cpp::WindowsScancode::vEnter, glfw::Key::vEnter },
-			{ win_cpp::WindowsScancode::v1_and_End, glfw::Key::v1_and_End },
-			{ win_cpp::WindowsScancode::v2_and_Down_Arrow, glfw::Key::v2_and_Down_Arrow },
-			{ win_cpp::WindowsScancode::v3_and_PageDn, glfw::Key::v3_and_PageDn },
-			{ win_cpp::WindowsScancode::v4_and_Left_Arrow, glfw::Key::v4_and_Left_Arrow },
-			{ win_cpp::WindowsScancode::v5_, glfw::Key::v5_ },
-			{ win_cpp::WindowsScancode::v6_and_Right_Arrow, glfw::Key::v6_and_Right_Arrow },
-			{ win_cpp::WindowsScancode::v7_and_Home, glfw::Key::v7_and_Home },
-			{ win_cpp::WindowsScancode::v8_and_Up_Arrow, glfw::Key::v8_and_Up_Arrow },
-			{ win_cpp::WindowsScancode::v9_and_PageUp, glfw::Key::v9_and_PageUp },
-			{ win_cpp::WindowsScancode::v0_and_Insert, glfw::Key::v0_and_Insert },
-			{ win_cpp::WindowsScancode::vPeriod_and_Delete, glfw::Key::vPeriod_and_Delete },
-			{ win_cpp::WindowsScancode::vNonUS_Backslash_and_Pipe, glfw::Key::vNonUS_Backslash_and_Pipe },
-			{ win_cpp::WindowsScancode::vApplication, glfw::Key::vApplication },
-			{ win_cpp::WindowsScancode::vPower, glfw::Key::vPower },
-			{ win_cpp::WindowsScancode::vEquals, glfw::Key::vEquals },
-			{ win_cpp::WindowsScancode::vF13, glfw::Key::vF13 },
-			{ win_cpp::WindowsScancode::vF14, glfw::Key::vF14 },
-			{ win_cpp::WindowsScancode::vF15, glfw::Key::vF15 },
-			{ win_cpp::WindowsScancode::vF16, glfw::Key::vF16 },
-			{ win_cpp::WindowsScancode::vF17, glfw::Key::vF17 },
-			{ win_cpp::WindowsScancode::vF18, glfw::Key::vF18 },
-			{ win_cpp::WindowsScancode::vF19, glfw::Key::vF19 },
-			{ win_cpp::WindowsScancode::vF20, glfw::Key::vF20 },
-			{ win_cpp::WindowsScancode::vF21, glfw::Key::vF21 },
-			{ win_cpp::WindowsScancode::vF22, glfw::Key::vF22 },
-			{ win_cpp::WindowsScancode::vF23, glfw::Key::vF23 },
-			{ win_cpp::WindowsScancode::vF24, glfw::Key::vF24 },
-			{ win_cpp::WindowsScancode::vComma, glfw::Key::vComma },
-			{ win_cpp::WindowsScancode::vInternational1, glfw::Key::vInternational1 },
-			{ win_cpp::WindowsScancode::vInternational2, glfw::Key::vInternational2 },
-			{ win_cpp::WindowsScancode::vInternational3, glfw::Key::vInternational3 },
-			{ win_cpp::WindowsScancode::vInternational4, glfw::Key::vInternational4 },
-			{ win_cpp::WindowsScancode::vInternational5, glfw::Key::vInternational5 },
-			{ win_cpp::WindowsScancode::vInternational6, glfw::Key::vInternational6 },
-			{ win_cpp::WindowsScancode::vLANG1, glfw::Key::vLANG1 },
-			{ win_cpp::WindowsScancode::vLANG2, glfw::Key::vLANG2 },
-			{ win_cpp::WindowsScancode::vLANG3, glfw::Key::vLANG3 },
-			{ win_cpp::WindowsScancode::vLANG4, glfw::Key::vLANG4 },
-			{ win_cpp::WindowsScancode::vLANG5, glfw::Key::vLANG5 },
-			{ win_cpp::WindowsScancode::vLeftControl, glfw::Key::vLeftControl },
-			{ win_cpp::WindowsScancode::vLeftShift, glfw::Key::vLeftShift },
-			{ win_cpp::WindowsScancode::vLeftAlt, glfw::Key::vLeftAlt },
-			{ win_cpp::WindowsScancode::vLeftGUI, glfw::Key::vLeftGUI },
-			{ win_cpp::WindowsScancode::vRightControl, glfw::Key::vRightControl },
-			{ win_cpp::WindowsScancode::vRightShift, glfw::Key::vRightShift },
-			{ win_cpp::WindowsScancode::vRightAlt, glfw::Key::vRightAlt },
-			{ win_cpp::WindowsScancode::vRightGUI, glfw::Key::vRightGUI },
-			{ win_cpp::WindowsScancode::vScanNextTrack, glfw::Key::vScanNextTrack },
-			{ win_cpp::WindowsScancode::vScanPreviosTrack, glfw::Key::vScanPreviosTrack },
-			{ win_cpp::WindowsScancode::vStop, glfw::Key::vStop },
-			{ win_cpp::WindowsScancode::vPlay_Pause, glfw::Key::vPlay_Pause },
-			{ win_cpp::WindowsScancode::vMute, glfw::Key::vMute },
-			{ win_cpp::WindowsScancode::vVolumeIncrement, glfw::Key::vVolumeIncrement },
-			{ win_cpp::WindowsScancode::vVolumeDecrement, glfw::Key::vVolumeDecrement },
-			{ win_cpp::WindowsScancode::vAL_Consumer_Control_Configuration, glfw::Key::vAL_Consumer_Control_Configuration },
-			{ win_cpp::WindowsScancode::vAL_EmailReader, glfw::Key::vAL_EmailReader },
-			{ win_cpp::WindowsScancode::vAL_Calculator, glfw::Key::vAL_Calculator },
-			{ win_cpp::WindowsScancode::vAL_LocalMachineBrowser, glfw::Key::vAL_LocalMachineBrowser },
-			{ win_cpp::WindowsScancode::vAC_Search, glfw::Key::vAC_Search },
-			{ win_cpp::WindowsScancode::vAC_Home, glfw::Key::vAC_Home },
-			{ win_cpp::WindowsScancode::vAC_Back, glfw::Key::vAC_Back },
-			{ win_cpp::WindowsScancode::vAC_Forward, glfw::Key::vAC_Forward },
-			{ win_cpp::WindowsScancode::vAC_Stop, glfw::Key::vAC_Stop },
-			{ win_cpp::WindowsScancode::vAC_Refresh, glfw::Key::vAC_Refresh },
-			{ win_cpp::WindowsScancode::vAC_Bookmarks, glfw::Key::vAC_Bookmarks }
+			{ win_cpp::WindowsScancode::NULL, glfw_base::Key::NULL },
+			{ win_cpp::WindowsScancode::vA, glfw_base::Key::vA },
+			{ win_cpp::WindowsScancode::vB, glfw_base::Key::vB },
+			{ win_cpp::WindowsScancode::vC, glfw_base::Key::vC },
+			{ win_cpp::WindowsScancode::vD, glfw_base::Key::vD },
+			{ win_cpp::WindowsScancode::vE, glfw_base::Key::vE },
+			{ win_cpp::WindowsScancode::vF, glfw_base::Key::vF },
+			{ win_cpp::WindowsScancode::vG, glfw_base::Key::vG },
+			{ win_cpp::WindowsScancode::vH, glfw_base::Key::vH },
+			{ win_cpp::WindowsScancode::vI, glfw_base::Key::vI },
+			{ win_cpp::WindowsScancode::vJ, glfw_base::Key::vJ },
+			{ win_cpp::WindowsScancode::vK, glfw_base::Key::vK },
+			{ win_cpp::WindowsScancode::vL, glfw_base::Key::vL },
+			{ win_cpp::WindowsScancode::vM, glfw_base::Key::vM },
+			{ win_cpp::WindowsScancode::vN, glfw_base::Key::vN },
+			{ win_cpp::WindowsScancode::vO, glfw_base::Key::vO },
+			{ win_cpp::WindowsScancode::vP, glfw_base::Key::vP },
+			{ win_cpp::WindowsScancode::vQ, glfw_base::Key::vQ },
+			{ win_cpp::WindowsScancode::vR, glfw_base::Key::vR },
+			{ win_cpp::WindowsScancode::vS, glfw_base::Key::vS },
+			{ win_cpp::WindowsScancode::vT, glfw_base::Key::vT },
+			{ win_cpp::WindowsScancode::vU, glfw_base::Key::vU },
+			{ win_cpp::WindowsScancode::vV, glfw_base::Key::vV },
+			{ win_cpp::WindowsScancode::vW, glfw_base::Key::vW },
+			{ win_cpp::WindowsScancode::vX, glfw_base::Key::vX },
+			{ win_cpp::WindowsScancode::vY, glfw_base::Key::vY },
+			{ win_cpp::WindowsScancode::vZ, glfw_base::Key::vZ },
+			{ win_cpp::WindowsScancode::v1_and_Bang, glfw_base::Key::v1_and_Bang },
+			{ win_cpp::WindowsScancode::v2_and_At, glfw_base::Key::v2_and_At },
+			{ win_cpp::WindowsScancode::v3_and_Hash, glfw_base::Key::v3_and_Hash },
+			{ win_cpp::WindowsScancode::v4_and_Dollar, glfw_base::Key::v4_and_Dollar },
+			{ win_cpp::WindowsScancode::v5_and_Percent, glfw_base::Key::v5_and_Percent },
+			{ win_cpp::WindowsScancode::v6_and_Caret, glfw_base::Key::v6_and_Caret },
+			{ win_cpp::WindowsScancode::v7_and_Ampersand, glfw_base::Key::v7_and_Ampersand },
+			{ win_cpp::WindowsScancode::v8_and_Star, glfw_base::Key::v8_and_Star },
+			{ win_cpp::WindowsScancode::v9_and_Left_Bracket, glfw_base::Key::v9_and_Left_Bracket },
+			{ win_cpp::WindowsScancode::v0_and_Right_Brackert, glfw_base::Key::v0_and_Right_Brackert },
+			{ win_cpp::WindowsScancode::vReturnEnter, glfw_base::Key::vReturnEnter },
+			{ win_cpp::WindowsScancode::vEscape, glfw_base::Key::vEscape },
+			{ win_cpp::WindowsScancode::vDelete, glfw_base::Key::vDelete },
+			{ win_cpp::WindowsScancode::vTab, glfw_base::Key::vTab },
+			{ win_cpp::WindowsScancode::vSpaceBar, glfw_base::Key::vSpaceBar },
+			{ win_cpp::WindowsScancode::vDash_and_underscore, glfw_base::Key::vDash_and_underscore },
+			{ win_cpp::WindowsScancode::vEquals_and_Plus, glfw_base::Key::vEquals_and_Plus },
+			{ win_cpp::WindowsScancode::vLeft_Brace, glfw_base::Key::vLeft_Brace },
+			{ win_cpp::WindowsScancode::vRight_Brace, glfw_base::Key::vRight_Brace },
+			{ win_cpp::WindowsScancode::vBackslash_and_Pipe, glfw_base::Key::vBackslash_and_Pipe },
+			{ win_cpp::WindowsScancode::vNonUS_Slash_and_Tilde, glfw_base::Key::vNonUS_Slash_and_Tilde }, // orig,  
+			{ win_cpp::WindowsScancode::vSemiColon_and_Colon, glfw_base::Key::vSemiColon_and_Colon },
+			{ win_cpp::WindowsScancode::vApostrophe_and_Double_Quotation_Mark, glfw_base::Key::vApostrophe_and_Double_Quotation_Mark },
+			{ win_cpp::WindowsScancode::vGrave_Accent_and_Tilde, glfw_base::Key::vGrave_Accent_and_Tilde },
+			{ win_cpp::WindowsScancode::vComma_and_LessThen, glfw_base::Key::vComma_and_LessThen },
+			{ win_cpp::WindowsScancode::vPeriod_and_GreaterThen, glfw_base::Key::vPeriod_and_GreaterThen },
+			{ win_cpp::WindowsScancode::vForwardSlash_and_QuestionMark, glfw_base::Key::vForwardSlash_and_QuestionMark },
+			{ win_cpp::WindowsScancode::vCapsLock, glfw_base::Key::vCapsLock },
+			{ win_cpp::WindowsScancode::vF1, glfw_base::Key::vF1 },
+			{ win_cpp::WindowsScancode::vF2, glfw_base::Key::vF2 },
+			{ win_cpp::WindowsScancode::vF3, glfw_base::Key::vF3 },
+			{ win_cpp::WindowsScancode::vF4, glfw_base::Key::vF4 },
+			{ win_cpp::WindowsScancode::vF5, glfw_base::Key::vF5 },
+			{ win_cpp::WindowsScancode::vF6, glfw_base::Key::vF6 },
+			{ win_cpp::WindowsScancode::vF7, glfw_base::Key::vF7 },
+			{ win_cpp::WindowsScancode::vF8, glfw_base::Key::vF8 },
+			{ win_cpp::WindowsScancode::vF9, glfw_base::Key::vF9 },
+			{ win_cpp::WindowsScancode::vF10, glfw_base::Key::vF10 },
+			{ win_cpp::WindowsScancode::vF11, glfw_base::Key::vF11 },
+			{ win_cpp::WindowsScancode::vF12, glfw_base::Key::vF12 },
+			{ win_cpp::WindowsScancode::vPrintScreen, glfw_base::Key::vPrintScreen },
+			{ win_cpp::WindowsScancode::vScrollLock, glfw_base::Key::vScrollLock },
+			{ win_cpp::WindowsScancode::vPause, glfw_base::Key::vPause },
+			{ win_cpp::WindowsScancode::vInsert, glfw_base::Key::vInsert },
+			{ win_cpp::WindowsScancode::vHome, glfw_base::Key::vHome },
+			{ win_cpp::WindowsScancode::vPageUp, glfw_base::Key::vPageUp },
+			{ win_cpp::WindowsScancode::vDeleteForward, glfw_base::Key::vDeleteForward },
+			{ win_cpp::WindowsScancode::vEnd, glfw_base::Key::vEnd },
+			{ win_cpp::WindowsScancode::vPageDown, glfw_base::Key::vPageDown },
+			{ win_cpp::WindowsScancode::vRightArrow, glfw_base::Key::vRightArrow },
+			{ win_cpp::WindowsScancode::vLeftArrow, glfw_base::Key::vLeftArrow },
+			{ win_cpp::WindowsScancode::vDownArrow, glfw_base::Key::vDownArrow },
+			{ win_cpp::WindowsScancode::vUpArrow, glfw_base::Key::vUpArrow },
+			{ win_cpp::WindowsScancode::vNumLock_and_Clear, glfw_base::Key::vNumLock_and_Clear },
+			{ win_cpp::WindowsScancode::vForwardSlash, glfw_base::Key::vForwardSlash },
+			{ win_cpp::WindowsScancode::vStar, glfw_base::Key::vStar },
+			{ win_cpp::WindowsScancode::vDash, glfw_base::Key::vDash },
+			{ win_cpp::WindowsScancode::vPlus, glfw_base::Key::vPlus },
+			{ win_cpp::WindowsScancode::vEnter, glfw_base::Key::vEnter },
+			{ win_cpp::WindowsScancode::v1_and_End, glfw_base::Key::v1_and_End },
+			{ win_cpp::WindowsScancode::v2_and_Down_Arrow, glfw_base::Key::v2_and_Down_Arrow },
+			{ win_cpp::WindowsScancode::v3_and_PageDn, glfw_base::Key::v3_and_PageDn },
+			{ win_cpp::WindowsScancode::v4_and_Left_Arrow, glfw_base::Key::v4_and_Left_Arrow },
+			{ win_cpp::WindowsScancode::v5_, glfw_base::Key::v5_ },
+			{ win_cpp::WindowsScancode::v6_and_Right_Arrow, glfw_base::Key::v6_and_Right_Arrow },
+			{ win_cpp::WindowsScancode::v7_and_Home, glfw_base::Key::v7_and_Home },
+			{ win_cpp::WindowsScancode::v8_and_Up_Arrow, glfw_base::Key::v8_and_Up_Arrow },
+			{ win_cpp::WindowsScancode::v9_and_PageUp, glfw_base::Key::v9_and_PageUp },
+			{ win_cpp::WindowsScancode::v0_and_Insert, glfw_base::Key::v0_and_Insert },
+			{ win_cpp::WindowsScancode::vPeriod_and_Delete, glfw_base::Key::vPeriod_and_Delete },
+			{ win_cpp::WindowsScancode::vNonUS_Backslash_and_Pipe, glfw_base::Key::vNonUS_Backslash_and_Pipe },
+			{ win_cpp::WindowsScancode::vApplication, glfw_base::Key::vApplication },
+			{ win_cpp::WindowsScancode::vPower, glfw_base::Key::vPower },
+			{ win_cpp::WindowsScancode::vEquals, glfw_base::Key::vEquals },
+			{ win_cpp::WindowsScancode::vF13, glfw_base::Key::vF13 },
+			{ win_cpp::WindowsScancode::vF14, glfw_base::Key::vF14 },
+			{ win_cpp::WindowsScancode::vF15, glfw_base::Key::vF15 },
+			{ win_cpp::WindowsScancode::vF16, glfw_base::Key::vF16 },
+			{ win_cpp::WindowsScancode::vF17, glfw_base::Key::vF17 },
+			{ win_cpp::WindowsScancode::vF18, glfw_base::Key::vF18 },
+			{ win_cpp::WindowsScancode::vF19, glfw_base::Key::vF19 },
+			{ win_cpp::WindowsScancode::vF20, glfw_base::Key::vF20 },
+			{ win_cpp::WindowsScancode::vF21, glfw_base::Key::vF21 },
+			{ win_cpp::WindowsScancode::vF22, glfw_base::Key::vF22 },
+			{ win_cpp::WindowsScancode::vF23, glfw_base::Key::vF23 },
+			{ win_cpp::WindowsScancode::vF24, glfw_base::Key::vF24 },
+			{ win_cpp::WindowsScancode::vComma, glfw_base::Key::vComma },
+			{ win_cpp::WindowsScancode::vInternational1, glfw_base::Key::vInternational1 },
+			{ win_cpp::WindowsScancode::vInternational2, glfw_base::Key::vInternational2 },
+			{ win_cpp::WindowsScancode::vInternational3, glfw_base::Key::vInternational3 },
+			{ win_cpp::WindowsScancode::vInternational4, glfw_base::Key::vInternational4 },
+			{ win_cpp::WindowsScancode::vInternational5, glfw_base::Key::vInternational5 },
+			{ win_cpp::WindowsScancode::vInternational6, glfw_base::Key::vInternational6 },
+			{ win_cpp::WindowsScancode::vLANG1, glfw_base::Key::vLANG1 },
+			{ win_cpp::WindowsScancode::vLANG2, glfw_base::Key::vLANG2 },
+			{ win_cpp::WindowsScancode::vLANG3, glfw_base::Key::vLANG3 },
+			{ win_cpp::WindowsScancode::vLANG4, glfw_base::Key::vLANG4 },
+			{ win_cpp::WindowsScancode::vLANG5, glfw_base::Key::vLANG5 },
+			{ win_cpp::WindowsScancode::vLeftControl, glfw_base::Key::vLeftControl },
+			{ win_cpp::WindowsScancode::vLeftShift, glfw_base::Key::vLeftShift },
+			{ win_cpp::WindowsScancode::vLeftAlt, glfw_base::Key::vLeftAlt },
+			{ win_cpp::WindowsScancode::vLeftGUI, glfw_base::Key::vLeftGUI },
+			{ win_cpp::WindowsScancode::vRightControl, glfw_base::Key::vRightControl },
+			{ win_cpp::WindowsScancode::vRightShift, glfw_base::Key::vRightShift },
+			{ win_cpp::WindowsScancode::vRightAlt, glfw_base::Key::vRightAlt },
+			{ win_cpp::WindowsScancode::vRightGUI, glfw_base::Key::vRightGUI },
+			{ win_cpp::WindowsScancode::vScanNextTrack, glfw_base::Key::vScanNextTrack },
+			{ win_cpp::WindowsScancode::vScanPreviosTrack, glfw_base::Key::vScanPreviosTrack },
+			{ win_cpp::WindowsScancode::vStop, glfw_base::Key::vStop },
+			{ win_cpp::WindowsScancode::vPlay_Pause, glfw_base::Key::vPlay_Pause },
+			{ win_cpp::WindowsScancode::vMute, glfw_base::Key::vMute },
+			{ win_cpp::WindowsScancode::vVolumeIncrement, glfw_base::Key::vVolumeIncrement },
+			{ win_cpp::WindowsScancode::vVolumeDecrement, glfw_base::Key::vVolumeDecrement },
+			{ win_cpp::WindowsScancode::vAL_Consumer_Control_Configuration, glfw_base::Key::vAL_Consumer_Control_Configuration },
+			{ win_cpp::WindowsScancode::vAL_EmailReader, glfw_base::Key::vAL_EmailReader },
+			{ win_cpp::WindowsScancode::vAL_Calculator, glfw_base::Key::vAL_Calculator },
+			{ win_cpp::WindowsScancode::vAL_LocalMachineBrowser, glfw_base::Key::vAL_LocalMachineBrowser },
+			{ win_cpp::WindowsScancode::vAC_Search, glfw_base::Key::vAC_Search },
+			{ win_cpp::WindowsScancode::vAC_Home, glfw_base::Key::vAC_Home },
+			{ win_cpp::WindowsScancode::vAC_Back, glfw_base::Key::vAC_Back },
+			{ win_cpp::WindowsScancode::vAC_Forward, glfw_base::Key::vAC_Forward },
+			{ win_cpp::WindowsScancode::vAC_Stop, glfw_base::Key::vAC_Stop },
+			{ win_cpp::WindowsScancode::vAC_Refresh, glfw_base::Key::vAC_Refresh },
+			{ win_cpp::WindowsScancode::vAC_Bookmarks, glfw_base::Key::vAC_Bookmarks }
 };
 
-glfw::Key to_glfw_key(win_cpp::WindowsScancode key) {
+glfw_base::Key to_glfw_key(win_cpp::WindowsScancode key) {
 	auto end = windows_keyboard_keys_to_glfw_keys.end();
 	auto res = windows_keyboard_keys_to_glfw_keys.find(key);
-	return (res != end) ? res->second : glfw::Key::NULL;
+	return (res != end) ? res->second : glfw_base::Key::NULL;
 }
 
-glfw::CharModsFlags getKeyMods() {
-	glfw::CharModsFlags mods;
+glfw_base::CharModsFlags getKeyMods() {
+	glfw_base::CharModsFlags mods;
 
 	// if (win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_SHIFT) & 0x8000u) {
 	if (std::to_underlying(win_cpp::GetAsyncKeyState(win_cpp::VirtualKeysStandardSet::VK_SHIFT))) {
-		mods |= glfw::CharModsFlags::values::shift;
+		mods |= glfw_base::CharModsFlags::values::shift;
 	}
 	// if (win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_CONTROL) & 0x8000u) {
 	if (std::to_underlying(win_cpp::GetAsyncKeyState(win_cpp::VirtualKeysStandardSet::VK_CONTROL))) {
-		mods |= glfw::CharModsFlags::values::control;
+		mods |= glfw_base::CharModsFlags::values::control;
 	}
 	// if (win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_MENU) & 0x8000u) {
 	if (std::to_underlying(win_cpp::GetAsyncKeyState(win_cpp::VirtualKeysStandardSet::VK_MENU))) {
-		mods |= glfw::CharModsFlags::values::alt;
+		mods |= glfw_base::CharModsFlags::values::alt;
 	}
 	// if ((win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_LWIN) | win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_RWIN)) & 0x8000u) {
 	if (std::to_underlying(win_cpp::GetAsyncKeyState(win_cpp::VirtualKeysStandardSet::VK_LWIN))
 		| std::to_underlying(win_cpp::GetAsyncKeyState(win_cpp::VirtualKeysStandardSet::VK_RWIN))) {
-		mods |= glfw::CharModsFlags::values::super;
+		mods |= glfw_base::CharModsFlags::values::super;
 	}
 
 	if (win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_CAPITAL) & 1u) { /* TODO */
-		mods |= glfw::CharModsFlags::values::caps_lock;
+		mods |= glfw_base::CharModsFlags::values::caps_lock;
 	}
 
 	if (win_cpp::GetKeyState(win_cpp::VirtualKeysStandardSet::VK_NUMLOCK) & 1u) { /* TODO */
-		mods |= glfw::CharModsFlags::values::num_lock;
+		mods |= glfw_base::CharModsFlags::values::num_lock;
 	}
 
 	return mods;
 }
 
-glfw::CharModsCallbackF charmod_default_callback = [](unsigned, glfw::CharModsFlags charmod) {};
-glfw::CharacterCallbackF character_default_callback = [](unsigned) {};
-glfw::KeyCallbackF key_default_callback = [](glfw::Key key, unsigned scancode, glfw::KeyState action, glfw::CharModsFlags mods) {};
+glfw_base::CharModsCallbackF charmod_default_callback = [](unsigned, glfw_base::CharModsFlags charmod) {};
+glfw_base::CharacterCallbackF character_default_callback = [](unsigned) {};
+glfw_base::KeyCallbackF key_default_callback = [](glfw_base::Key key, unsigned scancode, glfw_base::KeyState action, glfw_base::CharModsFlags mods) {};
 
 struct Input {
 	private:
-		glfw::GLFWKeyState key_state = glfw::scancode_key_state;
+		glfw_base::KeyStateMap key_state = glfw_base::inital_key_state;
 		bool sticky_keys = false;
 		bool lockKeyMods = false;
-		glfw::CharModsCallbackF _charmod = charmod_default_callback;
-		glfw::CharacterCallbackF _character = character_default_callback;
-		glfw::KeyCallbackF key_callback = key_default_callback;
+		glfw_base::CharModsCallbackF _charmod = charmod_default_callback;
+		glfw_base::CharacterCallbackF _character = character_default_callback;
+		glfw_base::KeyCallbackF key_callback = key_default_callback;
 
 	private:
-		constexpr glfw::CharModsFlags apply_KeyMods(glfw::CharModsFlags mods) const noexcept {
+		constexpr glfw_base::CharModsFlags apply_KeyMods(glfw_base::CharModsFlags mods) const noexcept {
 			if (!lockKeyMods) {
-				constexpr glfw::CharModsFlags caps_lock_int_represent = glfw::CharModsFlags::values::caps_lock;
-				constexpr glfw::CharModsFlags num_lock_int_represent = glfw::CharModsFlags::values::num_lock;
-				constexpr glfw::CharModsFlags res = ~(caps_lock_int_represent | num_lock_int_represent);
+				constexpr glfw_base::CharModsFlags caps_lock_int_represent = glfw_base::CharModsFlags::values::caps_lock;
+				constexpr glfw_base::CharModsFlags num_lock_int_represent = glfw_base::CharModsFlags::values::num_lock;
+				constexpr glfw_base::CharModsFlags res = ~(caps_lock_int_represent | num_lock_int_represent);
 				mods &= res;
 			}
 			return mods;
@@ -230,7 +229,7 @@ struct Input {
 		constexpr void set_LockKeyMods(bool x) noexcept { lockKeyMods = x; }
 		constexpr bool get_LockKeyMods() const noexcept { return lockKeyMods; }
 
-		void process_Char(unsigned codepoint, glfw::CharModsFlags mods, bool plain) const {
+		void process_Char(unsigned codepoint, glfw_base::CharModsFlags mods, bool plain) const {
 			// if (codepoint < 32 || (codepoint > 126 && codepoint < 160)) {
 				// return;
 			// }
@@ -242,26 +241,26 @@ struct Input {
 			}
 		}
 
-		void process_Key(glfw::Key key, unsigned scancode, glfw::KeyState action, glfw::CharModsFlags mods) {
+		void process_Key(glfw_base::Key key, unsigned scancode, glfw_base::KeyState action, glfw_base::CharModsFlags mods) {
 			if (true) {
 				bool repeated = 0;
 
-				if (action == glfw::KeyState::release && key_state[key] == glfw::KeyState::release) {
+				if (action == glfw_base::KeyState::release && key_state[key] == glfw_base::KeyState::release) {
 					return;
 				}
 
-				if (action == glfw::KeyState::press && key_state[key] == glfw::KeyState::press) {
+				if (action == glfw_base::KeyState::press && key_state[key] == glfw_base::KeyState::press) {
 					repeated = true;
 				}
 
-				if (action == glfw::KeyState::release && sticky_keys) {
-					key_state[key] = glfw::KeyState::stick;
+				if (action == glfw_base::KeyState::release && sticky_keys) {
+					key_state[key] = glfw_base::KeyState::stick;
 				}	else {
 					key_state[key] = action;
 				}
 
 				if (repeated) {
-					action = glfw::KeyState::repeat;
+					action = glfw_base::KeyState::repeat;
 				}
 			}
 
@@ -272,21 +271,21 @@ struct Input {
 			}
 		}
 
-		void set_key_mods_callback(glfw::CharModsCallbackF&& cmc) {
+		void set_key_mods_callback(glfw_base::CharModsCallbackF&& cmc) {
 			_charmod = std::forward<decltype(cmc)>(cmc);
 		};
-		void set_character_callback(glfw::CharacterCallbackF&& cc) {
+		void set_character_callback(glfw_base::CharacterCallbackF&& cc) {
 			_character = std::forward<decltype(cc)>(cc);
 		};
-		void set_key_callback(glfw::KeyCallbackF&& kc) {
+		void set_key_callback(glfw_base::KeyCallbackF&& kc) {
 			key_callback = std::forward<decltype(kc)>(kc);
 		};
 
 		Input() noexcept : _charmod(charmod_default_callback), _character(character_default_callback) {}
 		Input(
-			glfw::CharModsCallbackF&& charmod_f,
-			glfw::CharacterCallbackF&& character_f,
-			glfw::KeyCallbackF&& key_f
+			glfw_base::CharModsCallbackF&& charmod_f,
+			glfw_base::CharacterCallbackF&& character_f,
+			glfw_base::KeyCallbackF&& key_f
 		) noexcept : _charmod(charmod_f), _character(character_f), key_callback(key_f)
 		{
 
@@ -343,14 +342,14 @@ struct GLFW_Monitor_Win32 {
 		}
 };
 
-glfw::CursorStateCallbackT dummy_state_callback = [](const glfw::CursorState&) noexcept {};
-glfw::CursorPositionCallbackT dummy_pos_callback = [](const std::pair<int, int>& pos) noexcept {};
+glfw_base::CursorStateCallbackT dummy_state_callback = [](const glfw_base::CursorState&) noexcept {};
+glfw_base::CursorPositionCallbackT dummy_pos_callback = [](const std::pair<int, int>& pos) noexcept {};
 struct Cursor {
 	private:
-		glfw::CursorState state_ = glfw::CursorState::normal;
-		glfw::CursorRawInputState raw_input_state = glfw::CursorRawInputState::disabled;
-		glfw::CursorStateCallbackT cursor_state_callback_f = dummy_state_callback;
-		glfw::CursorPositionCallbackT cursor_position_callback_f = dummy_pos_callback;
+		glfw_base::CursorState state_ = glfw_base::CursorState::normal;
+		glfw_base::CursorRawInputState raw_input_state = glfw_base::CursorRawInputState::disabled;
+		glfw_base::CursorStateCallbackT cursor_state_callback_f = dummy_state_callback;
+		glfw_base::CursorPositionCallbackT cursor_position_callback_f = dummy_pos_callback;
 		std::unique_ptr<win_cpp::MouseRawInput> mri;
 		std::pair<int, int> position = { 0, 0 };
 
@@ -366,19 +365,19 @@ struct Cursor {
 		}
 
 		std::pair<int, int> get_position() const noexcept { return position; }
-		glfw::CursorRawInputState get_RawInputState() { return raw_input_state; }
-		glfw::CursorState get_state() const noexcept { return state_; }
+		glfw_base::CursorRawInputState get_RawInputState() { return raw_input_state; }
+		glfw_base::CursorState get_state() const noexcept { return state_; }
 
-		void set_cursor_position_callback(glfw::CursorPositionCallbackT&& cpct) {
+		void set_cursor_position_callback(glfw_base::CursorPositionCallbackT&& cpct) {
 			cursor_position_callback_f = std::forward<decltype(cpct)>(cpct);
 		}
 
-		void set_cursor_state_callback(glfw::CursorStateCallbackT&& csct) {
+		void set_cursor_state_callback(glfw_base::CursorStateCallbackT&& csct) {
 			cursor_state_callback_f = std::forward<decltype(csct)>(csct);
 		}
 
 #if 1
-		void set_state(const glfw::CursorState& state) {
+		void set_state(const glfw_base::CursorState& state) {
 			if (cursor_state_callback_f) {
 				std::invoke(cursor_state_callback_f, state);
 			}
@@ -387,20 +386,20 @@ struct Cursor {
 #endif
 
 #if 0
- 		glfw::CursorState get_state() const noexcept {
+ 		glfw_base::CursorState get_state() const noexcept {
  			return state_;
 		}
 #endif
 
 		void release(const win_cpp::Window& window) {
 			win_cpp::UnClipCursor();
-			state_ = glfw::CursorState::normal;
+			state_ = glfw_base::CursorState::normal;
 		}
 
 		void enable(const win_cpp::Window& window) {
-			if(raw_input_state == glfw::CursorRawInputState::enabled) {
+			if(raw_input_state == glfw_base::CursorRawInputState::enabled) {
 				mri.reset();
-				raw_input_state = glfw::CursorRawInputState::disabled;
+				raw_input_state = glfw_base::CursorRawInputState::disabled;
 			}
 			
 			release(window);
@@ -436,7 +435,7 @@ struct Cursor {
 			set_position(width / 2, height / 2);
 
 			capture(window);
-			if (raw_input_state == glfw::CursorRawInputState::enabled) {
+			if (raw_input_state == glfw_base::CursorRawInputState::enabled) {
 				mri.reset(new win_cpp::MouseRawInput(window));
 			}
 		}
@@ -450,7 +449,7 @@ win_cpp::Rect applyAspectRatio(
 	const win_cpp::Window& window,
 	win_cpp::Edges edge,
 	const win_cpp::Rect& area_,
-	const glfw::AspectRatio& aspect_raito
+	const glfw_base::AspectRatio& aspect_raito
 ) {
 	win_cpp::Rect area(area_);
 
@@ -549,15 +548,15 @@ void updateFramebufferTransparency(const win_cpp::Window& window) {
 		win_cpp::DwmEnableBlurBehindWindow(window, win_cpp::DWM_BlurBehindFlags::values::ENABLE);
 	}
 }
-glfw::WindowRectCallbackF dummy_window_rect_callback = [](const glfw::Rect&) constexpr noexcept {};
-glfw::WindowCloseCallbackF dummy_window_close_callback = []() constexpr noexcept {};
+glfw_base::WindowRectCallbackF dummy_window_rect_callback = [](const glfw_base::Rect&) constexpr noexcept {};
+glfw_base::WindowCloseCallbackF dummy_window_close_callback = []() constexpr noexcept {};
 
 #if 1
 
 struct Config  {
-	glfw::AspectRatio ar;
+	glfw_base::AspectRatio ar;
 	bool ar_used;
-	glfw::FrameAction fa;
+	glfw_base::FrameAction fa;
 	Input input;
 	Cursor cursor;
 	win_cpp::Mouse wmouse;
@@ -574,13 +573,13 @@ struct Config  {
 	bool autoIconify = false;
 	short keycodes[512];
 
-	glfw::WindowRectCallbackF window_rect_callback = dummy_window_rect_callback;
-	void set_window_rect_callback(glfw::WindowRectCallbackF&& wrcb) {
+	glfw_base::WindowRectCallbackF window_rect_callback = dummy_window_rect_callback;
+	void set_window_rect_callback(glfw_base::WindowRectCallbackF&& wrcb) {
 		window_rect_callback = std::forward<decltype(wrcb)>(wrcb);
 	}
 
-	glfw::WindowCloseCallbackF window_close_callback = dummy_window_close_callback;
-	void set_window_close_callback(glfw::WindowCloseCallbackF&& wcc) {
+	glfw_base::WindowCloseCallbackF window_close_callback = dummy_window_close_callback;
+	void set_window_close_callback(glfw_base::WindowCloseCallbackF&& wcc) {
 		window_close_callback = std::forward<decltype(wcc)>(wcc);
 	}
 
@@ -762,14 +761,14 @@ auto cWM_SIZING = [](Config& cfg, const win_cpp::Window& window, win_cpp::Edges 
 	if (cfg.ar_used) {
 		rect = applyAspectRatio(window, edges, rect, cfg.ar);
 	}
-	cfg.window_rect_callback(glfw::Rect(rect.get_left(), rect.get_top(), rect.get_right(), rect.get_bottom()));
+	cfg.window_rect_callback(glfw_base::Rect(rect.get_left(), rect.get_top(), rect.get_right(), rect.get_bottom()));
 	return true;
 };
 
 auto cWM_MOUSEACTIVATE = [](Config& cfg, const win_cpp::Window& window, win_cpp::WindowMessage wmsg, win_cpp::HitTest ht) -> win_cpp::window_proc_callback_result_type  {
 	if (wmsg == win_cpp::WindowMessage::WM_LBUTTONDOWN) {
 		if (ht != win_cpp::HitTest::HTCLIENT) {
-			cfg.fa.set_state(glfw::FrameActionState::enabled);
+			cfg.fa.set_state(glfw_base::FrameActionState::enabled);
 		}
 	}
 	return std::nullopt;
@@ -777,22 +776,22 @@ auto cWM_MOUSEACTIVATE = [](Config& cfg, const win_cpp::Window& window, win_cpp:
 
 auto cWM_CAPTURECHANGED = [](Config& cfg, const win_cpp::Window& window, bool has_parent_window) -> win_cpp::window_proc_callback_result_type {
 	if (!has_parent_window && std::to_underlying(cfg.fa.get_state())) {
-		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+		if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 			cfg.cursor.disable(window);
-		}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+		}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 			cfg.cursor.capture(window);
 		}
-		cfg.fa.set_state(glfw::FrameActionState::disabled);
+		cfg.fa.set_state(glfw_base::FrameActionState::disabled);
 	}
 	return std::nullopt;
 };
 
 auto cWM_SETFOCUS = [](Config& cfg, const win_cpp::Window& window) -> win_cpp::window_proc_callback_result_type {
 	cfg.focus.isFocused = true;
-	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
-		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
+		if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 			cfg.cursor.disable(window);
-		} else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+		} else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 			cfg.cursor.capture(window);
 		}
 	}
@@ -801,10 +800,10 @@ auto cWM_SETFOCUS = [](Config& cfg, const win_cpp::Window& window) -> win_cpp::w
 };
 
 auto cWM_KILLFOCUS = [](Config& cfg, const win_cpp::Window& window) -> win_cpp::window_proc_callback_result_type {
-	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
-		if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
+		if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 			cfg.cursor.disable(window);
-		}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+		}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 			cfg.cursor.capture(window);
 		}
 	}
@@ -930,33 +929,33 @@ auto cWM_UNICHAR = [](Config& cfg, const win_cpp::Window& window, unsigned codep
 };
 
 auto cWM_KEYDOWN = [](Config& cfg, const win_cpp::Window& window, win_cpp::VirtualKeysStandardSet vk, const win_cpp::WindowsKeyData& data) -> win_cpp::window_proc_callback_result_type {
-	glfw::KeyState action = glfw::KeyState::press;
-	glfw::CharModsFlags mods = getKeyMods();
-	glfw::Key key = to_glfw_key(data.scanCode);
+	glfw_base::KeyState action = glfw_base::KeyState::press;
+	glfw_base::CharModsFlags mods = getKeyMods();
+	glfw_base::Key key = to_glfw_key(data.scanCode);
 	cfg.input.process_Key(key, std::to_underlying(data.scanCode), action, mods);
 	return 0;
 };
 
 auto cWM_SYSKEYDOWN = [](Config& cfg, const win_cpp::Window& window, win_cpp::VirtualKeysStandardSet vk, const win_cpp::WindowsKeyData& data) -> win_cpp::window_proc_callback_result_type {
-	glfw::KeyState action = glfw::KeyState::press;
-	glfw::CharModsFlags mods = getKeyMods();
-	glfw::Key key = to_glfw_key(data.scanCode);
+	glfw_base::KeyState action = glfw_base::KeyState::press;
+	glfw_base::CharModsFlags mods = getKeyMods();
+	glfw_base::Key key = to_glfw_key(data.scanCode);
 	cfg.input.process_Key(key, std::to_underlying(data.scanCode), action, mods);
 	return 0;
 };
 
 auto cWM_KEYUP = [](Config& cfg, const win_cpp::Window& window, win_cpp::VirtualKeysStandardSet vk, const win_cpp::WindowsKeyData& data) -> win_cpp::window_proc_callback_result_type {
-	glfw::KeyState action = glfw::KeyState::release;
-	glfw::CharModsFlags mods = getKeyMods();
-	glfw::Key key = to_glfw_key(data.scanCode);
+	glfw_base::KeyState action = glfw_base::KeyState::release;
+	glfw_base::CharModsFlags mods = getKeyMods();
+	glfw_base::Key key = to_glfw_key(data.scanCode);
 	cfg.input.process_Key(key, std::to_underlying(data.scanCode), action, mods);
 	return 0;
 };
 
 auto cWM_SYSKEYUP = [](Config& cfg, const win_cpp::Window& window, win_cpp::VirtualKeysStandardSet vk, const win_cpp::WindowsKeyData& data) -> win_cpp::window_proc_callback_result_type {
-	glfw::KeyState action = glfw::KeyState::release;
-	glfw::CharModsFlags mods = getKeyMods();
-	glfw::Key key = to_glfw_key(data.scanCode);
+	glfw_base::KeyState action = glfw_base::KeyState::release;
+	glfw_base::CharModsFlags mods = getKeyMods();
+	glfw_base::Key key = to_glfw_key(data.scanCode);
 	cfg.input.process_Key(key, std::to_underlying(data.scanCode), action, mods);
 	return 0;
 };
@@ -969,11 +968,11 @@ auto cWM_MOUSEMOVE = [](Config& cfg, const win_cpp::Window& window, const std::p
 		cfg.cursor.enter();
 	}
 
-	if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 		auto [lx, ly] = cfg.cursor.get_position();
 		auto dx = x - lx;
 		auto dy = y - ly;
-		if (cfg.cursor.get_RawInputState() == glfw::CursorRawInputState::enabled) {
+		if (cfg.cursor.get_RawInputState() == glfw_base::CursorRawInputState::enabled) {
 			return 0; // ?
 		}
 		
@@ -1034,24 +1033,24 @@ auto cWM_RAW_INPUT_HID = [](Config& cfg, const win_cpp::Window& window, win_cpp:
 };
 
 auto cWM_LBUTTONDOWN = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::press;
-	auto key = glfw::Key::vLMB;
+	auto action = glfw_base::KeyState::press;
+	auto key = glfw_base::Key::vLMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
 };
 
 auto cWM_MBUTTONDOWN = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::press;
-	auto key = glfw::Key::vMMB;
+	auto action = glfw_base::KeyState::press;
+	auto key = glfw_base::Key::vMMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
 };
 
 auto cWM_RBUTTONDOWN = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::press;
-	auto key = glfw::Key::vRMB;
+	auto action = glfw_base::KeyState::press;
+	auto key = glfw_base::Key::vRMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
@@ -1062,24 +1061,24 @@ auto cWM_XBUTTONDOWN = [](Config& cfg, const win_cpp::Window& window, unsigned n
 };
 
 auto cWM_LBUTTONUP = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::release;
-	auto key = glfw::Key::vLMB;
+	auto action = glfw_base::KeyState::release;
+	auto key = glfw_base::Key::vLMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
 };
 
 auto cWM_MBUTTONUP = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::release;
-	auto key = glfw::Key::vMMB;
+	auto action = glfw_base::KeyState::release;
+	auto key = glfw_base::Key::vMMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
 };
 
 auto cWM_RBUTTONUP = [](Config& cfg, const win_cpp::Window& window, const std::pair<short, short>& m_pos, win_cpp::MouseKeysFlags m_botton_down) -> win_cpp::window_proc_callback_result_type {
-	auto action = glfw::KeyState::release;
-	auto key = glfw::Key::vRMB;
+	auto action = glfw_base::KeyState::release;
+	auto key = glfw_base::Key::vRMB;
 	constexpr unsigned scancode = 0u;
 	cfg.input.process_Key(key, scancode, action, getKeyMods());
 	return 0;
@@ -1101,48 +1100,48 @@ auto cWM_MOUSEVWHEEL = [](const win_cpp::Window& window, Config& cfg win_cpp::Po
 };
 
 auto cWM_ENTERSIZEMOVE = [](const win_cpp::Window& window, Config& cfg win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-		if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
+		if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
 		return 0;
 	}
-	if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 		cfg.cursor.enable(window);
-	}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+	}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 		cfg.cursor.capture(window);
 	}
 	return 0;
 };
 
 auto cWM_ENTERMENULOOP = [](const win_cpp::Window& window, Config& cfg win_cpp::PolymorphismByWindows&& windowData) -> long long {
-	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
+	if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
 		return 0;
 	}
-	if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 		cfg.cursor.enable(window);
-	}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+	}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 		cfg.cursor.capture(window);
 	}
 	return 0;
 };
 
 auto cWM_EXITSIZEMOVE = [](const win_cpp::Window& window, Config& cfg win_cpp::PolymorphismByWindows&& windowData) -> long long  {
-	if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
+	if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
 		return 0;
 	}
-	if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 		cfg.cursor.disable(window);
-	}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+	}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 		cfg.cursor.release(window);
 	}
 	return 0;
 };
 
 auto cWM_EXITMENULOOP = [](const win_cpp::Window& window, Config& cfg win_cpp::PolymorphismByWindows&& windowData) -> long long {
-		if (cfg.fa.get_state() == glfw::FrameActionState::enabled) {
+		if (cfg.fa.get_state() == glfw_base::FrameActionState::enabled) {
 		return 0;
 	}
-	if (cfg.cursor.get_state() == glfw::CursorState::disabled) {
+	if (cfg.cursor.get_state() == glfw_base::CursorState::disabled) {
 		cfg.cursor.disable(window);
-	}	else if (cfg.cursor.get_state() == glfw::CursorState::captured) {
+	}	else if (cfg.cursor.get_state() == glfw_base::CursorState::captured) {
 		cfg.cursor.release(window);
 	}
 	return 0;
@@ -1218,21 +1217,21 @@ win_cpp::MainClassCreateInfo get_mainclass_info(const win_cpp::Instance& instanc
 	return mainclass_info;
 }
 
-win_cpp::WindowStyle get_WindowStyle(const glfw::WindowCreateInfo& glfw_window_info) {
+win_cpp::WindowStyle get_WindowStyle(const glfw_base::WindowCreateInfo& glfw_window_info) {
 	/* TODO */
 	return win_cpp::WindowStyle::values::WS_OVERLAPPEDWINDOW;
 }
 
-win_cpp::ExtendedWindowStyle get_WindowStyleEX(const glfw::WindowCreateInfo& glfw_window_info) {
+win_cpp::ExtendedWindowStyle get_WindowStyleEX(const glfw_base::WindowCreateInfo& glfw_window_info) {
 	/* TODO */
 	return win_cpp::ExtendedWindowStyle::values::WS_EX_TOPMOST;
 }
 
-win_cpp::Rect to_win_rect(const glfw::Rect& glfw_rect) {
+win_cpp::Rect to_win_rect(const glfw_base::Rect& glfw_rect) {
 	return win_cpp::Rect{ glfw_rect.get_left(), glfw_rect.get_top(), glfw_rect.get_right(), glfw_rect.get_bottom() };
 }
 
-win_cpp::Title to_win_title(const glfw::Title& title) {
+win_cpp::Title to_win_title(const glfw_base::Title& title) {
 	return win_cpp::Title(title.get_sv());
 }
 
@@ -1257,29 +1256,29 @@ win_cpp::WindowCreateInfo win32_window_create_info(
 	return window_info;
 }
 
-namespace win32_window {
+namespace glfw_win32 {
 	win_cpp::Instance instance;
 	win_cpp::MainClass main_class{ get_mainclass_info(instance) };
 
-	export struct GLFW_Window_Win
-		: glfw::wVisible
-		, glfw::wResizable
-		, glfw::wDecorated
-		, glfw::wFocused
-		, glfw::wAutoiconify
-		, glfw::wFloating
-		, glfw::wMaximized
-		, glfw::wCenterCursor
-		, glfw::wTransparent
-		, glfw::wFocusOnShow
-		, glfw::wScaleToMonitor
+	export struct Window
+		: glfw_base::wVisible
+		, glfw_base::wResizable
+		, glfw_base::wDecorated
+		, glfw_base::wFocused
+		, glfw_base::wAutoiconify
+		, glfw_base::wFloating
+		, glfw_base::wMaximized
+		, glfw_base::wCenterCursor
+		, glfw_base::wTransparent
+		, glfw_base::wFocusOnShow
+		, glfw_base::wScaleToMonitor
 	{
 		private:
 			Config config;
 			win_cpp::Window window;
 
 		public:
-			GLFW_Window_Win(const glfw::WindowCreateInfo& info)
+			Window(const glfw_base::WindowCreateInfo& info)
 				: wVisible(info.visible)
 				, wResizable(info.resizable)
 				, wDecorated(info.decorated)
@@ -1307,35 +1306,35 @@ namespace win32_window {
 			} // ctor
 
 		public:
-			glfw::Title get_Title() const {
-				return glfw::Title(window.get_Title().get_c()); 
+			glfw_base::Title get_Title() const {
+				return glfw_base::Title(window.get_Title().get_c()); 
 			}
-			void set_Title(const glfw::Title& title) { 
+			void set_Title(const glfw_base::Title& title) { 
 				window.set_Title(win_cpp::Title{ title.get_sv() });
 			}
 
-			// glfw::Icon get_Icon() const { get_Icon(); } 
-			void set_Icon(const glfw::Icon& icon) { }
+			// glfw_base::Icon get_Icon() const { get_Icon(); } 
+			void set_Icon(const glfw_base::Icon& icon) { }
 
-			glfw::Rect get_Position() const {
+			glfw_base::Rect get_Position() const {
 				auto win_rect = window.GetClientRect();
-				return glfw::Rect(win_rect.get_left(), win_rect.get_top(), win_rect.get_right(), win_rect.get_bottom());
+				return glfw_base::Rect(win_rect.get_left(), win_rect.get_top(), win_rect.get_right(), win_rect.get_bottom());
 			}
-			void set_Position(const glfw::Rect& rect) { 
+			void set_Position(const glfw_base::Rect& rect) { 
 				win_cpp::Rect wrect(rect.get_left(), rect.get_top(), rect.get_right(), rect.get_bottom());
 				win_cpp::WindowZOrder order = win_cpp::WindowZOrder::HWND_TOPMOST;
 				win_cpp::SetWindowPosFlags swp = win_cpp::SetWindowPosFlags::values::SWP_NOZORDER;
 				window.SetWindowPosition(order, wrect, swp);
 			}
 
-			glfw::SizeLimits get_SizeLimits() const { return glfw::SizeLimits(0, 0); }
-			void set_SizeLimits(const glfw::SizeLimits& s_limits) {} // set_SizeLimits(s_limits); }
+			glfw_base::SizeLimits get_SizeLimits() const { return glfw_base::SizeLimits(0, 0); }
+			void set_SizeLimits(const glfw_base::SizeLimits& s_limits) {} // set_SizeLimits(s_limits); }
 #if 0 /* TODO*/
-			glfw::AspectRatio get_AspectRatio() const { return get_AspectRatio(); }
-			void set_AspectRation(const glfw::AspectRatio& aspect_ratio) { set_AspectRatio(aspect_ratio); }
+			glfw_base::AspectRatio get_AspectRatio() const { return get_AspectRatio(); }
+			void set_AspectRation(const glfw_base::AspectRatio& aspect_ratio) { set_AspectRatio(aspect_ratio); }
 #endif		
-			// glfw::Opacity_type get_Opacity() const { get_Opacity(); }
-			// void set_Opacity(const glfw::Opacity_type& opacity) { set_Opacity(); }
+			// glfw_base::Opacity_type get_Opacity() const { get_Opacity(); }
+			// void set_Opacity(const glfw_base::Opacity_type& opacity) { set_Opacity(); }
 
 			void maximize() { window.maximize(); }
 			void show() { window.show(); }
@@ -1344,53 +1343,37 @@ namespace win32_window {
 			void close() { win_cpp::WindowClose(window); }
 
 		public:
-			void set_key_mods_callback(glfw::CharModsCallbackF&& cmc) {
+			void set_key_mods_callback(glfw_base::CharModsCallbackF&& cmc) {
 				config.input.set_key_mods_callback(std::forward<decltype(cmc)>(cmc));
 			}
-			void set_character_callback(glfw::CharacterCallbackF&& cc) {
+			void set_character_callback(glfw_base::CharacterCallbackF&& cc) {
 				config.input.set_character_callback(std::forward<decltype(cc)>(cc));
 			}
-			void set_key_callback(glfw::KeyCallbackF&& kc) {
+			void set_key_callback(glfw_base::KeyCallbackF&& kc) {
 				config.input.set_key_callback(std::forward<decltype(kc)>(kc));
 			}
-			void set_cursor_position_callback(glfw::CursorPositionCallbackT&& cpct) {
+			void set_cursor_position_callback(glfw_base::CursorPositionCallbackT&& cpct) {
 				config.cursor.set_cursor_position_callback(std::forward<decltype(cpct)>(cpct));
 			}
-			void set_cursor_state_callback(glfw::CursorStateCallbackT&& csct) {
+			void set_cursor_state_callback(glfw_base::CursorStateCallbackT&& csct) {
 				config.cursor.set_cursor_state_callback(std::forward<decltype(csct)>(csct));
 			}
-			void set_window_rect_callback(glfw::WindowRectCallbackF&& wrb) {
+			void set_window_rect_callback(glfw_base::WindowRectCallbackF&& wrb) {
 				config.set_window_rect_callback(std::forward<decltype(wrb)>(wrb));
 			}
-			void set_window_close_callback(glfw::WindowCloseCallbackF&& wcc) {
+			void set_window_close_callback(glfw_base::WindowCloseCallbackF&& wcc) {
 				config.set_window_close_callback(std::forward<decltype(wcc)>(wcc));
 			}
 
-			const win_cpp::Window& get_win_window() const {
-				if (!win_cpp::Window::type(window)) { throw; }
-				return window;
+			vk::raii::SurfaceKHR get_vulkan_surface(const vk::raii::Instance& vk_instance) const {
+				auto win32_window_handle = win_cpp::Window::type(window);
+				auto win32_instance_handle = win_cpp::Instance::type(instance);
+				vk::Win32SurfaceCreateInfoKHR Win32SurfaceCreateInfo = {};
+				Win32SurfaceCreateInfo.setHinstance(win32_instance_handle);
+				Win32SurfaceCreateInfo.setHwnd(win32_window_handle);
+				return vk::raii::SurfaceKHR(vk_instance, Win32SurfaceCreateInfo);
 			}
 	}; // struct GLFW_Window_Win
-
-	static_assert(glfw::WindowLikeWithDefaultConfig<GLFW_Window_Win>);
-
-	export vk::raii::SurfaceKHR get_vk_raii_SurfaceKHR(
-		const vk::raii::Instance& vk_instance,
-		const glfw::Window<GLFW_Window_Win>& glfw_window
-	) {
-		const GLFW_Window_Win& n_window = static_cast<const GLFW_Window_Win&>(glfw_window);
-		const win_cpp::Window& window = n_window.get_win_window();
-		vk::Win32SurfaceCreateInfoKHR Win32SurfaceCreateInfo = {};
-		vk::Win32SurfaceCreateFlagBitsKHR create_flags = {};
-		using vk_hinstance_type = decltype(Win32SurfaceCreateInfo.hinstance);
-		using vk_hwnd_type = decltype(Win32SurfaceCreateInfo.hwnd);
-		// static_assert(std::same_as<vk_hinstance_type, win_Instance_type>);
-		auto vp_i = static_cast<void*>(win_cpp::Instance::type(instance));
-		auto vp_h = static_cast<void*>(win_cpp::Window::type(window));
-		Win32SurfaceCreateInfo.setHinstance((win_cpp::HINSTANCE)vp_i);
-		Win32SurfaceCreateInfo.setHwnd((win_cpp::HWND)vp_h);
-		Win32SurfaceCreateInfo.setFlags(create_flags);
-		return vk::raii::SurfaceKHR(vk_instance, Win32SurfaceCreateInfo);
-	}
-
+	static_assert(glfw_base::WindowLikeWithDefaultConfig<Window>);
+	
 } // ns 

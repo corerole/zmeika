@@ -1,4 +1,5 @@
 set(WIN_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 target_sources(
 	${PROJECT_NAME} PUBLIC
 	FILE_SET CXX_MODULES 
@@ -9,5 +10,4 @@ target_sources(
 		"${WIN_DIR}/win_enums.cppm"
 		"${WIN_DIR}/win_hid_usage.cppm"
 		"${WIN_DIR}/windowProc.cppm"
-		"${WIN_DIR}/AtomicFlagInit.cppm"
 )

@@ -1,7 +1,8 @@
 ﻿// main.cpp
 import std;
-import win_cpp;
-import glfw_win32_window;
+// import win_cpp;
+// import glfw_win32_window;
+import AtomicFlagMutex;
 import glfw;
 import vulkan;
 import vulkan_helpers;
@@ -15,18 +16,19 @@ import spv_reflect; //
 using namespace std::chrono_literals;
 
 template <typename T> struct Data {
+	using mutex_type = AtomicFlagMutex;
 	private:
-		mutable AtomicFlagMutex mutex;
+		mutable mutex_type mutex;
 		T mtx;
 
 	public:
 		T read() const {
-			std::lock_guard<AtomicFlagMutex> lk{mutex};
+			std::lock_guard<mutex_type> lk{mutex};
 			return mtx;
 		}
 
 		void write(T&& data) {
-			std::lock_guard<AtomicFlagMutex> lk{mutex};
+			std::lock_guard<mutex_type> lk{mutex};
 			mtx = std::move(data);
 		}
 
@@ -73,8 +75,7 @@ int main() {
 	glfw::WindowCreateInfo info = {};
 	info.title = glfw::Title(AppName);
 	info.rect = glfw::Rect(25, 25, 400, 400);
-	using window_type = glfw::Window<win32_window::GLFW_Window_Win>;
-	window_type window(info);
+	glfw::Window window(info);
 	window.set_key_mods_callback(std::move(x_charmod_default_callback));
 	window.set_character_callback(std::move(x_character_default_callback));
 	window.set_key_callback(std::move(x_key_default_callback));
@@ -95,7 +96,8 @@ int main() {
 	window.set_window_close_callback(std::move(close_callback));
 
 	{
-		vk::raii::SurfaceKHR surface = win32_window::get_vk_raii_SurfaceKHR(instance, window);
+		// vk::raii::SurfaceKHR surface = win32_window::get_vk_raii_SurfaceKHR(instance, window);
+		vk::raii::SurfaceKHR surface = window.get_vulkan_surface(instance);
 
 		auto PhisicalDevices = instance.enumeratePhysicalDevices();
 		const vk::raii::PhysicalDevice& physical_device = PhisicalDevices[0];
@@ -482,8 +484,13 @@ int main() {
 
 		using binded_camera_update_function = std::function<void(const vk::raii::CommandBuffer&)>;
 		using update_f = std::function<void(const vk::raii::CommandBuffer&, const vk::raii::Framebuffer&)>;
-
-		std::pmr::vector<binded_camera_update_function> shaders_setup_command_buffer;
+	
+		constexpr std::size_t DUMMY = 8 * 64;
+		constexpr std::size_t N_shaders = 3;
+		constexpr std::size_t CUF_SZ = sizeof(binded_camera_update_function) * N_shaders + DUMMY;
+		std::array<std::byte, CUF_SZ> cuff_buff = {};
+		std::pmr::monotonic_buffer_resource cuf_mbr(cuff_buff.data(), cuff_buff.size(), nullptr);
+		std::pmr::vector<binded_camera_update_function> shaders_setup_command_buffer(&cuf_mbr);
 		auto skybox_ucb = std::bind_back(
 			std::bind_front(&decltype(skybox)::setup_command_buffers, std::ref(skybox))
 			, std::ref(camera.get_DescriptorSet())
@@ -496,11 +503,23 @@ int main() {
 			std::bind_front(&decltype(vkCube_shader)::setup_command_buffers, std::ref(vkCube_shader))
 			, std::ref(camera.get_DescriptorSet())
 		);
-		shaders_setup_command_buffer.push_back(std::move(skybox_ucb));
-		shaders_setup_command_buffer.push_back(std::move(gs_ucb));
-		shaders_setup_command_buffer.push_back(std::move(cube_ucb));
 
-
+		try {
+			shaders_setup_command_buffer.push_back(std::move(skybox_ucb));
+			shaders_setup_command_buffer.push_back(std::move(gs_ucb));
+			shaders_setup_command_buffer.push_back(std::move(cube_ucb));
+		} catch (const std::exception& E) {
+			std::cout << E.what()
+			<< " | " << cuff_buff.size()
+			<< " = " << sizeof(skybox_ucb)
+			<< " + " << sizeof(gs_ucb)
+			<< " + " << sizeof(cube_ucb);
+			std::terminate();
+		} catch (...) {
+			std::cout << "FATAL ERROR" << std::endl;
+			std::terminate();
+		}
+		
 		update_f update_commandbuffer =
 				[&renderpass, &extent, &update_mouse_data, shaders = std::cref(shaders_setup_command_buffer)]( 
 					const vk::raii::CommandBuffer& command_buffer,

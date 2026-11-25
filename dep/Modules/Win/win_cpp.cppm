@@ -2,17 +2,9 @@
 
 export module win_cpp;
 import std;
+import AtomicFlagMutex;
 import win;
 import win_enums;
-
-export struct AtomicFlagMutex {
-	private:
-		std::atomic_flag flag{}; // include <atomic> is it? ATOMIC_FLAG_INIT = {}
-	public:
-		void lock() { while (flag.test_and_set(std::memory_order_acquire)) { std::this_thread::yield(); } }
-		bool try_lock() { return !flag.test_and_set(std::memory_order_acquire); }
-		void unlock() { flag.clear(std::memory_order_release); }
-};
 
 export namespace win_cpp {
 	using windowproc_f = win::t::LRESULT(*)(win::t::HWND hWnd, win::t::UINT uMsg, win::t::WPARAM wParam, win::t::LPARAM lParam);

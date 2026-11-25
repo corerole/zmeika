@@ -1,0 +1,426 @@
+﻿module;
+
+export module glfw_base;
+import vulkan; // REMOVE IT
+import std;
+import glfw_enums;
+
+export namespace glfw_base {
+	using KeyStateMap = glfw_enums::KeyStateMap;
+	using glfw_enums::inital_key_state;
+
+	using CharModsFlags = glfw_enums::CharModsFlags;
+	using Key = glfw_enums::Key;
+	using KeyState = glfw_enums::KeyState;
+	using AspectRatioFormats = glfw_enums::AspectRatioFormats;
+	using Orientation = glfw_enums::Orientation;
+	using FrameActionState = glfw_enums::FrameActionState;
+	using CursorState = glfw_enums::CursorState;
+	using CursorRawInputState = glfw_enums::CursorRawInputState;
+	using FrameActionState = glfw_enums::FrameActionState;
+
+	struct Rect;
+
+	using CharModsCallbackF = std::function<void(unsigned, CharModsFlags)>;
+	using CharacterCallbackF = std::function<void(unsigned)>;
+	using KeyCallbackF = std::function<void(Key, unsigned, KeyState, CharModsFlags)>;
+
+	using WindowRectCallbackF = std::function<void(const glfw_base::Rect&)>;
+	using WindowCloseCallbackF = std::function<void()>;
+
+	using CursorStateCallbackT = std::function<void(const glfw_base::CursorState&)>;
+	using CursorPositionCallbackT = std::function<void(const std::pair<int, int>&)>;
+
+	template<typename WindowType, typename WindowCreateInfo> concept windowLike =
+		requires(
+		WindowType& window,
+		const WindowType & const_window,
+		const WindowCreateInfo& cfg,
+		CharModsCallbackF&& cmc,
+		CharacterCallbackF&& cc,
+		KeyCallbackF&& kc,
+		CursorStateCallbackT&& csct,
+		CursorPositionCallbackT&& cpct,
+		WindowRectCallbackF&& wrc,
+		WindowCloseCallbackF&& wcc 
+		)
+	{
+		{ WindowType(cfg) };
+		{ const_window.isResizable() } -> std::same_as<bool>;
+		{ window.set_key_mods_callback(std::forward<decltype(cmc)>(cmc)) } -> std::same_as<void>;
+		{ window.set_character_callback(std::forward<decltype(cc)>(cc)) }-> std::same_as<void>;
+		{ window.set_key_callback(std::forward<decltype(kc)>(kc)) } -> std::same_as<void>;
+		{ window.set_cursor_position_callback(std::forward<decltype(cpct)>(cpct)) } -> std::same_as<void>;
+		{ window.set_cursor_state_callback(std::forward<decltype(csct)>(csct)) } -> std::same_as<void>;
+		{ window.set_window_rect_callback(std::forward<decltype(wrc)>(wrc)) } -> std::same_as<void>;
+		{ window.set_window_close_callback(std::forward<decltype(wcc)>(wcc)) } -> std::same_as<void>;
+	};
+
+	struct Icon {};
+
+	struct wResizable {
+		private:
+			bool resizable = false;
+
+		public:
+			wResizable(bool x) : resizable(x) {}
+
+		public:
+			bool isResizable() const { return resizable; }
+			void setResizable(bool x) { resizable = x; }
+	};
+
+	struct wVisible {
+		private:
+			bool visible;
+
+		public:	
+			wVisible(bool x) : visible(x) {}
+
+		public:
+			bool isVisible() const { return visible;  }
+			void setVisible(bool x) { visible = x; }
+	};
+
+	struct wDecorated {
+		private:
+			bool decorated;
+
+		public:
+			wDecorated(bool x) : decorated(x) {}
+
+		public:
+			bool isDecorated() const { return decorated;  }
+			void setDecorated(bool x) { decorated = x; }
+	};
+
+	struct wFocused {
+		private:
+			bool focused;
+
+		public:
+			wFocused(bool x) : focused(x) {}
+
+		public:
+			bool isFocused() const { return focused;  }
+			void setFocused(bool x) { focused = x; }
+	};
+
+	struct wAutoiconify {
+		private:
+			bool autoiconify;
+
+		public:
+			wAutoiconify(bool x) : autoiconify(x) {}
+
+		public:
+			bool isAutoiconify() const { return autoiconify;  }
+			void setAutoiconify(bool x) { autoiconify = x; }
+	};
+
+	struct wFloating {
+		private:
+			bool floating;
+
+		public:
+			wFloating(bool x) : floating(x) {}
+
+		public:
+			bool isFloating() const { return floating;  }
+			void setFloating(bool x) { floating = x; }
+	};
+
+	struct wMaximized {
+		private:
+			bool maximized;
+
+		public:
+			wMaximized(bool x) : maximized(x) {}
+
+		public:
+			bool isMaximized() const { return maximized;  }
+			void setMaximized(bool x) { maximized = x; }
+	};
+
+	struct wCenterCursor {
+		private:
+			bool centerCursor;
+
+		public:	
+			wCenterCursor(bool x) : centerCursor(x) {}
+
+		public:
+			bool isCenterCursor() const { return centerCursor;  }
+			void setCenterCursor(bool x) { centerCursor = x; }
+	};
+
+	struct wTransparent {
+		private:
+			bool transparent;
+
+		public:
+			wTransparent(bool x) : transparent(x) {}
+
+		public:
+			bool isTransparent() const { return transparent;  }
+			void setTransparent(bool x) { transparent = x; }
+	};
+
+	struct wFocusOnShow {
+		private:
+			bool focusOnShow;
+
+		public:
+			wFocusOnShow(bool x) : focusOnShow(x) {}
+
+		public:
+			bool isFocusOnShow() const { return focusOnShow;  }
+			void setFocusOnShow(bool x) { focusOnShow = x; }
+	};
+
+	struct wScaleToMonitor {
+		private:
+			bool scaleToMonitor;
+
+		public:
+			wScaleToMonitor(bool x) : scaleToMonitor(x) {}
+
+		public:
+			bool isScaleToMonitor() const { return scaleToMonitor;  }
+			void setScaleToMonitor(bool x) { scaleToMonitor = x; }
+	};
+
+	/* template<typename value_type> */
+	struct Rect {
+		private:
+			long left, top, right, bottom;
+
+		public:
+			constexpr const long& get_top() const noexcept { return top; }
+			constexpr long& get_top() { return top; }
+
+			constexpr const long& get_bottom() const noexcept { return bottom; }
+			constexpr long& get_bottom() noexcept { return bottom; }
+
+			constexpr const long& get_right() const noexcept { return right; }
+			constexpr long& get_right() noexcept { return right; }
+
+			constexpr const long& get_left() const noexcept { return left; }
+			constexpr long& get_left() noexcept { return left; }
+
+			constexpr Rect(long left = 0, long top = 0, long right = 0, long bottom = 0) noexcept : left(left), top(top), right(right), bottom(bottom) {}
+	};
+
+	struct SizeLimits {
+		private:
+			long height, width;
+
+		public:
+			SizeLimits() : height(0), width(0) {}
+			SizeLimits(long height, long width) : height(height), width(width) {}
+
+	};
+
+	std::wstring StringToWString(std::string_view sv) {
+		// return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(sv.data(), sv.data() + sv.size());
+		return std::wstring(sv.begin(), sv.end());
+	}
+	
+	std::wstring StringToWString(const std::string& sv) {
+		return std::wstring(sv.cbegin(), sv.cend());
+	}
+
+	struct Title {
+		private:
+			std::string title;
+		public:
+			Title() : title(" ") {}
+			Title(std::string_view str) : title(str) {}
+
+		public:
+			std::string_view get_sv() const { return std::string_view(title); }
+	};
+
+	using OpacityType = float;
+
+	template<typename ValueType>
+	struct AR : std::pair<ValueType, ValueType> {
+		private:
+			using Base = std::pair<ValueType, ValueType>;
+			
+			using ft = Base::first_type;
+			using st = Base::second_type;
+			using Base::first;
+			using Base::second;
+
+		public:
+			using Base::Base;
+
+			using nominator_type = std::add_lvalue_reference_t<ft>;
+			using const_nominator_type = std::add_const_t<nominator_type>;
+			using denominator_type = std::add_lvalue_reference_t<st>;
+			using const_denominator_type = std::add_const_t<denominator_type>;
+
+			const_nominator_type nominator() const { return first; }
+			nominator_type nominator() { return first; }
+
+			const_denominator_type denominator() const { return second; }
+			denominator_type denominator() { return second; }
+	};
+
+	struct AspectRatio {
+		using value_type = float;
+		using ValueHolder = glfw_enums::AspectRaitoFormatsMapType;
+		using AR_type = AR<value_type>;
+		private:
+			ValueHolder val = glfw_enums::AspectRatioStandardFormats;
+			AspectRatioFormats formats = AspectRatioFormats::Square;
+			Orientation orientaton = Orientation::Landscape;
+
+		public:
+			AR_type get() const { 
+				auto it = val.find(formats);
+				if(it != val.end()) {
+					if (std::to_underlying(orientaton)) {
+						return AR_type{ it->second.first, it->second.second };
+					}	else {
+						return AR_type{ it->second.second, it->second.first };
+					}
+				}
+				throw std::runtime_error(" There is no such format ");
+			}
+
+			void set_format(AspectRatioFormats fmt) {
+				formats = fmt;
+			}
+
+			void set_orientation(Orientation orient) {
+				orientaton = orient;
+			}
+
+			double get_Ratio() const {
+				auto res = get();
+				return res.nominator() / res.denominator();
+			}
+
+			AspectRatio(
+				AspectRatioFormats format = AspectRatioFormats::Square,
+				Orientation orient = Orientation::Landscape
+			) : formats(format), orientaton(orient) {}
+	};
+
+	struct FrameAction {
+		using state = FrameActionState;
+		private:
+			state state_ = state::disabled;
+
+		public:
+			constexpr state get_state() const noexcept { return state_; }
+			constexpr void set_state(const state& state) noexcept { state_ = state; }
+	};
+
+	struct WindowCreateInfo {
+		Rect rect = Rect(25, 25, 400, 400);
+		Title title = Title("App");
+		bool resizable;
+		bool decorated;
+		bool visible;
+		bool focused;
+		bool floating;
+		bool maximized;
+		bool autoiconify;
+		bool center_cursor;
+		bool transparent;
+		bool focus_on_show;
+		bool scale_to_monitor;
+	};
+
+	template<typename T> concept WindowLikeWithDefaultConfig = windowLike<T, WindowCreateInfo>;
+	template<WindowLikeWithDefaultConfig NativeWindow> struct Window {
+		private:
+			NativeWindow window;
+
+		public:
+			Window(const WindowCreateInfo& info) : window(info) {}
+			Window() : window(WindowCreateInfo{}) {}
+
+		public:
+			bool isResizable() const { return window.isResizable(); }
+			void setResizable(bool state) { window.setResizable(state); }
+			bool isDecorated() const { return window.isDecorated(); }
+			void setDecorated(bool state) { window.setDecorated(state); }
+			bool isVisible() const { return window.isVisible(); }
+			void setVisible(bool state) { window.setVisible(state); }
+			bool isFocused() const { return window.isFocused(); }
+			void setFocused(bool state) { window.setFocused(state); }
+			bool isFloating() const { return window.isFloating(); }
+			void setFloating(bool state) { window.setFloating(state); }
+			bool isMaximized() const { return window.isMaximized(); }
+			void setMaximized(bool state) { window.setMaximized(state); }
+			bool isAutoiconify() const { return window.isAutoiconify(); }
+			void setAutoiconify(bool state) { window.setAutoiconify(state); }
+			bool isCenterCursor() const { return window.isCenterCursor(); }
+			void setCenterCursor(bool state) { window.setCenterCursor(state); }
+			bool isTransparent() const { return window.isTransparent(); }
+			void setTransparent(bool state) { window.setTransparent(state); }
+			bool isFocusOnShow() const { return window.isFocusOnShow(); } 
+			void setFocusOnShow(bool state) { window.setFocusOnShow(state); }
+			bool isScaleToMonitor() const { return window.isScaleToMonitor(); }
+			void setScaleToMonitor(bool state) { window.setScaleToMonitor(state); }
+
+			Title get_Title() const { return window.get_Title(); }
+			void set_Title(Title title) { window.set_Title(title); }
+#if 0
+			Icon get_Icon() const { window.get_Icon(); }
+#endif
+			void set_Icon(const Icon& icon) { window.set_Icon(icon); }
+
+			Rect get_Position() const { return window.get_Position(); }
+			void set_Position(const Rect& rect) { window.set_Position(rect); } // Absolute or relative 
+
+			SizeLimits get_SizeLimits() const { return window.get_SizeLimits(); }
+			void set_SizeLimits(const SizeLimits& s_limits) { window.set_SizeLimits(s_limits); }
+#if 0 /* TODO*/
+			AspectRatio get_AspectRatio() const { return window.get_AspectRatio(); }
+			void set_AspectRation(const AspectRatio& aspect_ratio) { window.set_AspectRatio(aspect_ratio); }
+#endif		
+			OpacityType get_Opacity() const { window.get_Opacity(); }
+			void set_Opacity(const OpacityType& opacity) { window.set_Opacity(); }
+
+			void maximize() { window.maximize(); }
+			void show() { window.show(); }
+			void hide() { window.hide(); }
+			void focus() { window.focus(); }
+			void close() { window.close(); }
+
+		public:
+			void set_key_mods_callback(CharModsCallbackF&& cmc) { 
+				window.set_key_mods_callback(std::forward<decltype(cmc)>(cmc));
+			}
+			void set_character_callback(CharacterCallbackF&& cc) {
+				window.set_character_callback(std::forward<decltype(cc)>(cc));
+			}
+			void set_key_callback(KeyCallbackF&& kc) {
+				window.set_key_callback(std::forward<decltype(kc)>(kc));
+			}
+			void set_cursor_position_callback(CursorPositionCallbackT&& cpct) {
+				window.set_cursor_position_callback(std::forward<decltype(cpct)>(cpct));
+			}
+			void set_cursor_state_callback(CursorStateCallbackT&& csct) {
+				window.set_cursor_state_callback(std::forward<decltype(csct)>(csct));
+			}
+			void set_window_rect_callback(glfw_base::WindowRectCallbackF&& wrb) {
+				window.set_window_rect_callback(std::forward<decltype(wrb)>(wrb));
+			}
+			void set_window_close_callback(glfw_base::WindowCloseCallbackF&& wcc) {
+				window.set_window_close_callback(std::forward<decltype(wcc)>(wcc));
+			}
+
+		public:
+			vk::raii::SurfaceKHR get_vulkan_surface(const vk::raii::Instance& instance) const {
+				return window.get_vulkan_surface(instance);
+			}
+
+	}; // struct Window
+} // ns glfw
+
